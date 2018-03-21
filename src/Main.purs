@@ -43,9 +43,7 @@ instance applicativeBoomBoomD ∷ (Monoid tok) ⇒ Applicative (BoomBoomD tok a'
 newtype BoomBoom tok a = BoomBoom (BoomBoomD tok a a)
 derive instance newtypeBoomBoom ∷ Newtype (BoomBoom tok a) _
 
-type BoomBoomStr a = BoomBoom String a
-
-int ∷ BoomBoomStr Int
+int ∷ BoomBoom String Int
 int = BoomBoom $ BoomBoomD $
   { prs: \t → {a: _, tok: _ } <$> (fromString <<< takeDigits $ t) <@> stripDigits t
   , ser: show
@@ -67,7 +65,7 @@ parse (BoomBoom (BoomBoomD { prs })) = (_.a <$> _) <$> prs
 serialize ∷ ∀ a tok. BoomBoom tok a → (a → tok)
 serialize (BoomBoom (BoomBoomD { ser })) = ser
 
-path :: BoomBoomStr { x :: Int, y :: Int }
+path :: BoomBoom String { x :: Int, y :: Int }
 path = BoomBoom $
   { x: _, y: _ }
     <$> (_.x >- int)
