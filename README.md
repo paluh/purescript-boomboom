@@ -31,3 +31,35 @@ Output:
 {"value0":{"x":8080,"y":200}}
 300test800
 ```
+
+Session with `Alt` and `variant` helper:
+
+```purescript
+record = BoomBoom $ {x: _, y: _} <$> (_.x >- int) <* lit "/" <*> (_.y >- int)
+
+three' = BoomBoom $
+  variant (SProxy ∷ SProxy "one") int
+  <|> variant (SProxy ∷ SProxy "two") record
+  <|> variant (SProxy ∷ SProxy "zero") (BoomBoom $ pure unit)
+
+
+main = do
+  logShow (serialize three' (inj (SProxy ∷ SProxy "two") {x: 8, y: 9}))
+  logShow (serialize three' (inj (SProxy ∷ SProxy "zero") unit))
+  logShow (serialize three' (inj (SProxy ∷ SProxy "one") 8))
+
+  traceAnyA (parse three' "zero")
+  traceAnyA (parse three' "one8")
+  traceAnyA (parse three' "two8/9")
+```
+
+Output:
+
+```shell
+(Just "two8/9")
+(Just "zero")
+(Just "one8")
+Just { value0: { type: 'zero', value: {} } }
+Just { value0: { type: 'one', value: 8 } }
+Just { value0: { type: 'two', value: { x: 8, y: 9 } } }
+```

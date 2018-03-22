@@ -104,11 +104,6 @@ variant n b = lit (reflectSymbol n) *> ((inj n) <$> unv >? b)
     default Nothing
     # on n Just
 
-three' = BoomBoom $
-  variant (SProxy ∷ SProxy "one") int
-  <|> variant (SProxy ∷ SProxy "two") (wrap $ {x: _, y: _} <$> (_.x >- int) <* lit "/" <*> (_.y >- int))
-  <|> variant (SProxy ∷ SProxy "zero") (wrap $ pure unit)
-
 
 one = One <$> (unone >? int)
   where
@@ -124,6 +119,14 @@ two = Two <$> (untwo' >? int) <* lit "/" <*> (untwo'' >? int)
 
 three = BoomBoom $
   (lit "one" *> one) <|> (lit "two" *> two) <|> (lit "zero" *> pure Zero)
+
+record = BoomBoom $ {x: _, y: _} <$> (_.x >- int) <* lit "/" <*> (_.y >- int)
+
+three' = BoomBoom $
+  variant (SProxy ∷ SProxy "one") int
+  <|> variant (SProxy ∷ SProxy "two") record
+  <|> variant (SProxy ∷ SProxy "zero") (BoomBoom $ pure unit)
+
 
 main :: forall e. Eff (console :: CONSOLE | e) Unit
 main = do
