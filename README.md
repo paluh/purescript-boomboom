@@ -29,7 +29,7 @@ Output:
 
 ```shell
 {"value0":{"x":8080,"y":200}}
-300test800
+(Just 300test800)
 ```
 
 Session with `Alt` and `variant` helper:
