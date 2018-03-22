@@ -6,7 +6,7 @@ because you can boom in both directions!
 
 It is still just an experiment - for production ready solutions please check:
 * [purescript-routing-bob](https://github.com/paluh/purescript-routing-bob)
-* [purescript-boomerang](https://github.com/paluh/purescript-boomerang))
+* [purescript-boomerang](https://github.com/paluh/purescript-boomerang)
 
 I'm trying to implement bidirectional routing with "nearly" applicative interface here (inspired by this [sfvisser answer](https://www.reddit.com/r/haskell/comments/38o0f7/a_mixture_of_applicative_and_divisible/#thing_t1_crwh6le)). What I mean by "nearly" is this:
 
