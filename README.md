@@ -4,7 +4,11 @@ because you can boom in both directions!
 
 ## Description
 
-It is just experiment to implement bidirectional routing with "nearly" applicative interface (inspired by this [sfvisser response](https://www.reddit.com/r/haskell/comments/38o0f7/a_mixture_of_applicative_and_divisible/#thing_t1_crwh6le)). What I mean by nearly is this:
+It is still just an experiment - for production ready solutions please check:
+* [purescript-routing-bob](https://github.com/paluh/purescript-routing-bob)
+* [purescript-boomerang](https://github.com/paluh/purescript-boomerang))
+
+I'm trying to implement bidirectional routing with "nearly" applicative interface here (inspired by this [sfvisser answer](https://www.reddit.com/r/haskell/comments/38o0f7/a_mixture_of_applicative_and_divisible/#thing_t1_crwh6le)). What I mean by "nearly" is this:
 
 ```purescript
 path :: BoomBoom String { x :: Int, y :: Int }
