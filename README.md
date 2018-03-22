@@ -32,7 +32,7 @@ Output:
 (Just 300test800)
 ```
 
-I know that serialization result wrapped in `Maybe` can be a bit tedious, but it is required (I've not found any soultion) to implement `Alt`.
+I know that serialization result wrapped in `Maybe` can be a bit tedious, but it is required (I've not found any other solution) to implement `Alt`. I hope that generic interface (which I want to provide) will come to the rescue...
 
 Session with `Alt` and `variant` helper:
 
