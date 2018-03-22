@@ -32,6 +32,8 @@ Output:
 (Just 300test800)
 ```
 
+I know that serialization result wrapped in `Maybe` can be a bit tedious, but it is required (I've not found any soultion) to implement `Alt`.
+
 Session with `Alt` and `variant` helper:
 
 ```purescript
