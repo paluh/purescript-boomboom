@@ -20,10 +20,6 @@ import Type.Prelude (SProxy(..))
 -- | __D__ from diverging as a' can diverge from a
 newtype BoomBoomD tok a' a = BoomBoomD
   { prs ∷ tok → Maybe { a ∷ a, tok ∷ tok }
-  -- | The question is here
-  -- | do we want to use `memepty`
-  -- | in case of unhandled constructor
-  -- | leave it like that...
   , ser ∷ a' → Maybe tok
   }
 derive instance newtypeBoomBoomD ∷ Newtype (BoomBoomD tok a' a) _
