@@ -46,10 +46,7 @@ instance applyBoomBoomD ∷ (Semigroup tok) ⇒ Apply (BoomBoomD tok a') where
       { a: f, tok: t' } ← b1.prs t
       { a, tok: t'' } ← b2.prs t'
       pure { a: f a, tok: t'' }
-    ser a' = do
-      t1 ← b1.ser a'
-      t2 ← b2.ser a'
-      pure (t1 <> t2)
+    ser = (<>) <$> b1.ser <*> b2.ser
 
 instance applicativeBoomBoomD ∷ (Monoid tok) ⇒ Applicative (BoomBoomD tok a') where
   pure a = BoomBoomD { prs: pure <<< const { a, tok: mempty }, ser: const (Just mempty) }
