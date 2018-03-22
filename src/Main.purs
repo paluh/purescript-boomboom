@@ -9,14 +9,21 @@ import Data.Array (elem)
 import Data.Int (fromString)
 import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
-import Data.Newtype (class Newtype, unwrap)
+import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.String (Pattern(..), dropWhile, stripPrefix, takeWhile, toCharArray)
+import Data.Symbol (reflectSymbol)
+import Data.Variant (Variant, case_, default, inj, on)
 import Debug.Trace (traceAnyA)
 import Global.Unsafe (unsafeStringify)
+import Type.Prelude (SProxy(..))
 
 -- | __D__ from diverging as a' can diverge from a
 newtype BoomBoomD tok a' a = BoomBoomD
   { prs ∷ tok → Maybe { a ∷ a, tok ∷ tok }
+  -- | The question is here
+  -- | do we want to use `memepty`
+  -- | in case of unhandled constructor
+  -- | leave it like that...
   , ser ∷ a' → Maybe tok
   }
 derive instance newtypeBoomBoomD ∷ Newtype (BoomBoomD tok a' a) _
@@ -91,6 +98,20 @@ path = BoomBoom $
 
 data Three = Zero | One Int | Two Int Int
 
+-- variant ∷ ∀ n r. SProxy n → BoomBoom String a → BoomBoom String (Variant (n ∷ a | r))
+
+variant n b = lit (reflectSymbol n) *> ((inj n) <$> unv >? b)
+  where
+  unv =
+    default Nothing
+    # on n Just
+
+three' = BoomBoom $
+  variant (SProxy ∷ SProxy "one") int
+  <|> variant (SProxy ∷ SProxy "two") (wrap $ {x: _, y: _} <$> (_.x >- int) <* lit "/" <*> (_.y >- int))
+  <|> variant (SProxy ∷ SProxy "zero") (wrap $ pure unit)
+
+
 one = One <$> (unone >? int)
   where
   unone (One i) = Just i
@@ -110,6 +131,7 @@ main :: forall e. Eff (console :: CONSOLE | e) Unit
 main = do
   log $ unsafeStringify (parse path "8080test200")
   logShow (serialize path { x: 300, y: 800 })
+
   logShow (serialize three (Two 8 9))
   logShow (serialize three Zero)
   logShow (serialize three (One 8))
@@ -117,3 +139,12 @@ main = do
   traceAnyA (parse three "zero")
   traceAnyA (parse three "one8")
   traceAnyA (parse three "two8/9")
+
+
+  logShow (serialize three' (inj (SProxy ∷ SProxy "two") {x: 8, y: 9}))
+  logShow (serialize three' (inj (SProxy ∷ SProxy "zero") unit))
+  logShow (serialize three' (inj (SProxy ∷ SProxy "one") 8))
+
+  traceAnyA (parse three' "zero")
+  traceAnyA (parse three' "one8")
+  traceAnyA (parse three' "two8/9")
