@@ -54,7 +54,7 @@ instance applicativeBoomBoomD ∷ (Monoid tok) ⇒ Applicative (BoomBoomD tok a'
 instance altBoomBoom ∷ (Semigroup tok) ⇒ Alt (BoomBoomD tok a') where
   alt (BoomBoomD b1) (BoomBoomD b2) = BoomBoomD { prs, ser }
     where
-    -- | Piece of optimization ;-)
+    -- | Piece of premature optimization ;-)
     prs tok = case b1.prs tok of
       Nothing → b2.prs tok
       r → r
