@@ -42,7 +42,7 @@ instance applyBoomBoomD ∷ (Semigroup tok) ⇒ Apply (BoomBoomD tok a') where
       { a: f, tok: t' } ← b1.prs t
       { a, tok: t'' } ← b2.prs t'
       pure { a: f a, tok: t'' }
-    ser = (<>) <$> b1.ser <*> b2.ser
+    ser a = (<>) <$> b1.ser a <*> b2.ser a
 
 instance applicativeBoomBoomD ∷ (Monoid tok) ⇒ Applicative (BoomBoomD tok a') where
   pure a = BoomBoomD { prs: pure <<< const { a, tok: mempty }, ser: const (Just mempty) }
@@ -89,9 +89,9 @@ serialize (BoomBoom (BoomBoomD { ser })) = ser
 path :: BoomBoom String { x :: Int, y :: Int }
 path = BoomBoom $
   { x: _, y: _ }
-    <$> (_.x >- int)
+    <$> _.x >- int
     <* lit "test"
-    <*> (_.y >- int)
+    <*> _.y >- int
 
 data Three = Zero | One Int | Two Int Int
 
@@ -117,7 +117,11 @@ two = Two <$> (untwo' >? int) <* lit "/" <*> (untwo'' >? int)
 three = BoomBoom $
   (lit "one" *> one) <|> (lit "two" *> two) <|> (lit "zero" *> pure Zero)
 
-record = BoomBoom $ {x: _, y: _} <$> (_.x >- int) <* lit "/" <*> (_.y >- int)
+record = BoomBoom $
+  {x: _, y: _}
+  <$> _.x >- int
+  <* lit "/"
+  <*> _.y >- int
 
 three' = BoomBoom $
   variant (SProxy ∷ SProxy "one") int

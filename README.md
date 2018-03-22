@@ -14,9 +14,9 @@ I'm trying to implement bidirectional routing with "nearly" applicative interfac
 path :: BoomBoom String { x :: Int, y :: Int }
 path = BoomBoom $
   { x: _, y: _ }
-    <$> (_.x >- int)
+    <$> _.x >- int
     <* lit "test"
-    <*> (_.y >- int)
+    <*> _.y >- int
 
 main :: forall e. Eff (console :: CONSOLE | e) Unit
 main = do
@@ -37,7 +37,11 @@ I know that serialization result wrapped in `Maybe` can be a bit tedious, but it
 Session with `Alt` and `variant` helper:
 
 ```purescript
-record = BoomBoom $ {x: _, y: _} <$> (_.x >- int) <* lit "/" <*> (_.y >- int)
+record = BoomBoom $
+  {x: _, y: _}
+  <$> _.x >- int
+  <* lit "/"
+  <*> _.y >- int
 
 three' = BoomBoom $
   variant (SProxy ∷ SProxy "one") int
