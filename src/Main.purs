@@ -98,8 +98,6 @@ path = BoomBoom $
 
 data Three = Zero | One Int | Two Int Int
 
--- variant ∷ ∀ n r. SProxy n → BoomBoom String a → BoomBoom String (Variant (n ∷ a | r))
-
 variant n b = lit (reflectSymbol n) *> ((inj n) <$> unv >? b)
   where
   unv =
