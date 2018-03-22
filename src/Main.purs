@@ -11,6 +11,7 @@ import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
 import Data.Newtype (class Newtype, unwrap)
 import Data.String (Pattern(..), dropWhile, stripPrefix, takeWhile, toCharArray)
+import Debug.Trace (traceAnyA)
 import Global.Unsafe (unsafeStringify)
 
 -- | __D__ from diverging as a' can diverge from a
@@ -95,7 +96,7 @@ one = One <$> (unone >? int)
   unone (One i) = Just i
   unone _ = Nothing
 
-two = Two <$> (untwo' >? int) <*> (untwo'' >? int)
+two = Two <$> (untwo' >? int) <* lit "/" <*> (untwo'' >? int)
   where
   untwo' (Two i _) = Just i
   untwo' _ = Nothing
@@ -112,3 +113,7 @@ main = do
   logShow (serialize three (Two 8 9))
   logShow (serialize three Zero)
   logShow (serialize three (One 8))
+
+  traceAnyA (parse three "zero")
+  traceAnyA (parse three "one8")
+  traceAnyA (parse three "two8/9")
