@@ -9,13 +9,14 @@ import Data.Array (elem)
 import Data.Int (fromString)
 import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
-import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Newtype (class Newtype, unwrap)
+import Data.Record (get, insert)
 import Data.String (Pattern(..), dropWhile, stripPrefix, takeWhile, toCharArray)
 import Data.Symbol (reflectSymbol)
-import Data.Variant (Variant, case_, default, inj, on)
+import Data.Variant (Variant, default, inj, on)
 import Debug.Trace (traceAnyA)
 import Global.Unsafe (unsafeStringify)
-import Type.Prelude (SProxy(..))
+import Type.Prelude (class IsSymbol, class RowLacks, SProxy(..))
 
 -- | __D__ from diverging as a' can diverge from a
 newtype BoomBoomD tok a' a = BoomBoomD
@@ -58,8 +59,46 @@ instance altBoomBoom ∷ (Semigroup tok) ⇒ Alt (BoomBoomD tok a') where
       Nothing → b2.ser a
       r → r
 
+newtype BoomBoomD' tok a r r' = BoomBoomD' (BoomBoomD tok a (r → r'))
+
+instance semigroupoidBoomBoomD' ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomD' tok a) where
+  compose (BoomBoomD' (BoomBoomD b1)) (BoomBoomD' (BoomBoomD b2)) = BoomBoomD' $ BoomBoomD $
+    { prs: \tok → do
+        {a: r, tok: tok'} ← b2.prs tok
+        {a: r', tok: tok''} ← b1.prs tok'
+        pure {a: r' <<< r, tok: tok''}
+    , ser: \a → (<>) <$> b1.ser a <*> b2.ser a
+    }
+
+addField ∷ ∀ a n r r' s s' tok
+  . RowCons n a s s'
+  ⇒ RowLacks n s
+  ⇒ RowCons n a r r'
+  ⇒ RowLacks n r
+  ⇒ IsSymbol n
+  ⇒ SProxy n
+  → BoomBoom tok a
+  → BoomBoomD' tok { | s'} { | r } { | r'}
+addField p (BoomBoom (BoomBoomD b)) = BoomBoomD' $ BoomBoomD $
+  { prs: \t → (\{a, tok} → { a: \r → insert p a r, tok: tok }) <$> b.prs t
+  , ser: \r → b.ser (get p r)
+  }
+
+buildRecord
+  ∷ ∀ r tok
+  . BoomBoomD' tok r {} r
+  → BoomBoom tok r
+buildRecord (BoomBoomD' (BoomBoomD b)) = BoomBoom $ BoomBoomD
+  { prs: \tok → do
+      {a: r2r, tok: tok'} ← b.prs tok
+      pure {a: r2r {}, tok: tok'}
+  , ser: b.ser
+  }
+
+
 newtype BoomBoom tok a = BoomBoom (BoomBoomD tok a a)
 derive instance newtypeBoomBoom ∷ Newtype (BoomBoom tok a) _
+
 
 prefix ∷ ∀ a. String → BoomBoom String a → BoomBoomD String a a
 prefix s b = lit s *> unwrap b
@@ -101,7 +140,6 @@ variant n b = lit (reflectSymbol n) *> ((inj n) <$> unv >? b)
     default Nothing
     # on n Just
 
-
 one = One <$> (unone >? int)
   where
   unone (One i) = Just i
@@ -123,6 +161,16 @@ record = BoomBoom $
   <* lit "/"
   <*> _.y >- int
 
+three' :: forall t318.
+   BoomBoom String
+     (Variant
+        ( one :: Int
+        , two :: { x :: Int
+                 , y :: Int
+                 }
+        , zero :: Unit
+        )
+     )
 three' = BoomBoom $
   variant (SProxy ∷ SProxy "one") int
   <|> variant (SProxy ∷ SProxy "two") record
