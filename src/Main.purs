@@ -196,9 +196,13 @@ lit' s = BoomBoomD' $ const id <$> lit s
 
 main :: forall e. Eff (console :: CONSOLE | e) Unit
 main = do
-  logShow (serialize variant' (inj (SProxy ∷ SProxy "two") {x: 8, y: 9}))
   logShow (serialize variant' (inj (SProxy ∷ SProxy "zero") unit))
   logShow (serialize variant' (inj (SProxy ∷ SProxy "one") 8))
+  logShow (serialize variant' (inj (SProxy ∷ SProxy "two") {x: 8, y: 9}))
+
+  traceAnyA (parse variant' "two8/9")
+  traceAnyA (parse variant' "zero")
+  traceAnyA (parse variant' "one8")
 
   logShow (serialize record' {x: 8, y: 9})
   traceAnyA (parse record' "89/88")
