@@ -70,6 +70,12 @@ instance semigroupoidBoomBoomD' ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomD'
     , ser: \a → (<>) <$> b1.ser a <*> b2.ser a
     }
 
+instance categoryBoomBoomD' ∷ (Monoid tok) ⇒ Category (BoomBoomD' tok a) where
+  id = BoomBoomD' $ BoomBoomD $
+    { prs: \tok → pure { a: id, tok }
+    , ser: const mempty
+    }
+
 addField ∷ ∀ a n r r' s s' tok
   . RowCons n a s s'
   ⇒ RowLacks n s
@@ -177,6 +183,12 @@ three' = BoomBoom $
   <|> variant (SProxy ∷ SProxy "zero") (BoomBoom $ pure unit)
 
 
+lit' ∷ ∀ a r. String → BoomBoomD' String a r r
+lit' s = BoomBoomD' $ const id <$> lit s
+
+record' =
+  buildRecord $ addField (SProxy ∷ SProxy "x") int >>> lit' "/" >>> addField (SProxy ∷ SProxy "y") int
+
 main :: forall e. Eff (console :: CONSOLE | e) Unit
 main = do
   log $ unsafeStringify (parse path "8080test200")
@@ -198,3 +210,6 @@ main = do
   traceAnyA (parse three' "zero")
   traceAnyA (parse three' "one8")
   traceAnyA (parse three' "two8/9")
+
+  logShow (serialize record' {x: 8, y: 9})
+  traceAnyA (parse record' "89/88")
