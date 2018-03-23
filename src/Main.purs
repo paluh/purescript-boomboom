@@ -172,21 +172,15 @@ parse (BoomBoom (BoomBoomD { prs })) = (_.a <$> _) <$> prs
 serialize ∷ ∀ a tok. BoomBoom tok a → (a → tok)
 serialize (BoomBoom (BoomBoomD { ser })) = ser
 
-path :: BoomBoom String { x :: Int, y :: Int }
-path = BoomBoom $
-  { x: _, y: _ }
-    <$> _.x >- int
-    <* lit "test"
-    <*> _.y >- int
-
 record = BoomBoom $
   {x: _, y: _}
   <$> _.x >- int
   <* lit "/"
   <*> _.y >- int
 
-variant' = buildVariant $
-  addChoice (SProxy ∷ SProxy "one") int
+variant'
+  = buildVariant
+  $ addChoice (SProxy ∷ SProxy "one") int
   >>> addChoice (SProxy ∷ SProxy "two") record
   >>> addChoice (SProxy ∷ SProxy "zero") (BoomBoom $ pure unit)
 
@@ -202,10 +196,6 @@ lit' s = BoomBoomD' $ const id <$> lit s
 
 main :: forall e. Eff (console :: CONSOLE | e) Unit
 main = do
-  log $ unsafeStringify (parse path "8080test200")
-  logShow (serialize path { x: 300, y: 800 })
-
-
   logShow (serialize variant' (inj (SProxy ∷ SProxy "two") {x: 8, y: 9}))
   logShow (serialize variant' (inj (SProxy ∷ SProxy "zero") unit))
   logShow (serialize variant' (inj (SProxy ∷ SProxy "one") 8))
