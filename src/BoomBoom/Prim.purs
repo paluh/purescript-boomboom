@@ -96,10 +96,10 @@ instance categoryBoomBoomPrsAFn ∷ (Monoid tok) ⇒ Category (BoomBoomPrsAFn to
     , ser: const mempty
     }
 
-newtype BoomBoomSerTokFn tok a v v' = BoomBoomSerTokFn (BoomBoomD tok ((v → v') → tok) a)
+newtype BoomBoomSerFn tok a v v' = BoomBoomSerFn (BoomBoomD tok ((v → v') → tok) a)
 
-instance semigroupoidBoomBoomSerTokFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomSerTokFn tok a) where
-  compose (BoomBoomSerTokFn (BoomBoomD b1)) (BoomBoomSerTokFn (BoomBoomD b2)) = BoomBoomSerTokFn $ BoomBoomD
+instance semigroupoidBoomBoomSerFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomSerFn tok a) where
+  compose (BoomBoomSerFn (BoomBoomD b1)) (BoomBoomSerFn (BoomBoomD b2)) = BoomBoomSerFn $ BoomBoomD
     { prs: \tok → b1.prs tok <|> b2.prs tok
     , ser: \a2c2t → b2.ser (\a2b → b1.ser (\b2c → a2c2t (a2b >>> b2c)))
     }
@@ -129,8 +129,8 @@ addChoice
   ⇒ SProxy n
   -- → (∀ a'. SProxy n → BoomBoomD tok a' Unit)
   → BoomBoom tok a
-  → BoomBoomSerTokFn tok (Variant s') (Either (Variant r) tok) (Either (Variant r') tok)
-addChoice p (BoomBoom (BoomBoomD b)) = BoomBoomSerTokFn $ choice -- (lit p *> choice)
+  → BoomBoomSerFn tok (Variant s') (Either (Variant r) tok) (Either (Variant r') tok)
+addChoice p (BoomBoom (BoomBoomD b)) = BoomBoomSerFn $ choice -- (lit p *> choice)
   where
   choice = BoomBoomD
     { prs: b.prs >=> \{a, tok} → pure { a: inj p a, tok }
@@ -142,9 +142,9 @@ addChoice p (BoomBoom (BoomBoomD b)) = BoomBoomSerTokFn $ choice -- (lit p *> ch
 -- | ser ∷ (((Either (Variant r) tok → Either (Variant ()) tok) → tok) → tok)
 buildVariant
   ∷ ∀ tok r
-  . BoomBoomSerTokFn tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)
+  . BoomBoomSerFn tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)
   → BoomBoom tok (Variant r)
-buildVariant (BoomBoomSerTokFn (BoomBoomD {prs, ser})) = BoomBoom $ BoomBoomD
+buildVariant (BoomBoomSerFn (BoomBoomD {prs, ser})) = BoomBoom $ BoomBoomD
   { prs
   , ser: \v → ser (\a2t2t → (case (a2t2t (Left v)) of
       (Left _) → unsafeCrashWith "BoomBoom.Prim.buildVariant: empty variant?"
