@@ -39,13 +39,6 @@ derive instance functorBoomBoomD ∷ Functor (BoomBoomD tok a')
 -- |   <* lit "/"
 -- |   <*> _.y >- int
 -- |
--- | This manual work is tedious and can
--- | lead to incoherency in final `BoomBoom`
--- | - serializer can produce something which
--- | is not parsable or the other way around.
--- | Probably there are case where you want
--- | it so here it is.
--- |
 divergeA ∷ ∀ a a' tok. (a' → a) → BoomBoom tok a → BoomBoomD tok a' a
 divergeA d (BoomBoom (BoomBoomD { prs, ser })) = BoomBoomD { prs, ser: d >>> ser }
 
@@ -77,8 +70,8 @@ instance altBoomBoom ∷ (Monoid tok) ⇒ Alt (BoomBoomD tok a') where
     ser = (<>) <$> b1.ser <*> b2.ser
 
 -- | Enter the world of two categories which fully keep track of
--- | `BoomBoom` divergence and allow us define constructors
--- | for secure record and variant `BoomBooms`.
+-- | `BoomBoom` divergence and allow us define nice combinators
+-- | for variant and record build up.
 newtype BoomBoomPrsAFn tok a r r' = BoomBoomPrsAFn (BoomBoomD tok a (r → r'))
 
 instance semigroupoidBoomBoomPrsAFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomPrsAFn tok a) where
@@ -177,3 +170,8 @@ buildRecord (BoomBoomPrsAFn (BoomBoomD b)) = BoomBoom $ BoomBoomD
   , ser: b.ser
   }
 
+serialize ∷ ∀ a tok. BoomBoom tok a → (a → tok)
+serialize (BoomBoom (BoomBoomD { ser })) = ser
+
+parse ∷ ∀ a tok. BoomBoom tok a → (tok → Maybe a)
+parse (BoomBoom (BoomBoomD { prs })) = (_.a <$> _) <$> prs
