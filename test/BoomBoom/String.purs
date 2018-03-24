@@ -3,9 +3,11 @@ module Test.BoomBoom.String where
 import Prelude
 
 import BoomBoom.Prim (BoomBoom(..), addField, buildRecord, buildVariant, parse, serialize, (>-))
-import BoomBoom.String (addChoice, lit, int, string)
+import BoomBoom.String (addChoice, int, string)
 import BoomBoom.String as BoomBoom.String
 import Data.Maybe (Maybe(..))
+import Data.Newtype (class Newtype, unwrap)
+import Data.Variant (inj)
 import Global.Unsafe (unsafeStringify)
 import Test.Unit (suite) as Test.Unit
 import Test.Unit (test)
@@ -14,65 +16,36 @@ import Type.Prelude (SProxy(..))
 
 newtype R = R { x ∷ Int, y ∷ Int, z ∷ Int }
 derive instance eqR ∷ Eq R
+derive instance newtypeR ∷ Newtype R _
 instance showR ∷ Show R where
   show = unsafeStringify
 
-recordB = BoomBoom $
-  { x: _, y: _, z: _ }
-  <$> _.x >- int
-  <*> _.y >- int
-  <*> _.z >- int
-
-recordB'
-  = buildRecord
-  $ addField (SProxy ∷ SProxy "x") int
-  >>> addField (SProxy ∷ SProxy "y") int
-  >>> addField (SProxy ∷ SProxy "z") int
-
-variantB
-  = buildVariant
-  $ addChoice (SProxy ∷ SProxy "zero") (BoomBoom $ pure unit)
-  >>> addChoice (SProxy ∷ SProxy "one") int
-  >>> addChoice (SProxy ∷ SProxy "two") recordB
-
--- -- record'
--- --   = buildRecord
--- --   $ addField (SProxy ∷ SProxy "x") int
--- --   >>> lit' "/"
--- --   >>> addField (SProxy ∷ SProxy "y") int
--- -- 
--- -- lit' ∷ ∀ a r. String → BoomBoomD' String a r r
--- -- lit' s = BoomBoomD' $ const id <$> lit s
--- -- 
--- -- 
--- -- main :: forall e. Eff (console :: CONSOLE | e) Unit
--- -- main = do
--- --   logShow (serialize variant' (inj (SProxy ∷ SProxy "zero") unit))
--- --   logShow (serialize variant' (inj (SProxy ∷ SProxy "one") 8))
--- --   logShow (serialize variant' (inj (SProxy ∷ SProxy "two") {x: 8, y: 9}))
--- -- 
--- --   traceAnyA (parse variant' "two8/9")
--- --   traceAnyA (parse variant' "zero")
--- --   traceAnyA (parse variant' "one8")
--- -- 
--- --   logShow (serialize record' {x: 8, y: 9})
--- --   traceAnyA (parse record' "89/88")
--- -- 
-
 suite = do
   Test.Unit.suite "BoomBoom.String" $ do
+    let
+      recordB = BoomBoom $
+        { x: _, y: _, z: _ }
+        <$> _.x >- int
+        <*> _.y >- int
+        <*> _.z >- int
     Test.Unit.suite "simple record boomboom build by hand" $ do
       test "serializes correctly" $ do
-        equal (serialize recordB { x: 1, y: 2, z: 3 }) ["1", "2", "3"]
+        equal ["1", "2", "3"] (serialize recordB { x: 1, y: 2, z: 3 })
       test "parses correctly" $ do
-        equal (R <$> parse recordB ["1", "2", "3"]) (Just $ R { x: 1, y: 2, z: 3 })
+        equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB ["1", "2", "3"])
+    let
+      recordB'
+        = buildRecord
+        $ addField (SProxy ∷ SProxy "x") int
+        >>> addField (SProxy ∷ SProxy "y") int
+        >>> addField (SProxy ∷ SProxy "z") int
     Test.Unit.suite "simple record boomboom build with combinators" $ do
       test "serializes correctly" $ do
-        equal (serialize recordB' { x: 1, y: 2, z: 3 }) ["1", "2", "3"]
+        equal ["1", "2", "3"] (serialize recordB' { x: 1, y: 2, z: 3 })
       test "parses correctly" $ do
-        equal (R <$> parse recordB' ["1", "2", "3"]) (Just $ R { x: 1, y: 2, z: 3 })
+        equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB' ["1", "2", "3"])
     let
-      nested = BoomBoom $
+      nestedB = BoomBoom $
         { r1: _, r2: _ }
         <$> _.r1 >- recordB
         <*> _.r2 >- recordB
@@ -81,8 +54,45 @@ suite = do
         l = ["1", "2", "3", "11", "12", "13"]
         r = { r1: {x: 1, y: 2, z: 3}, r2: { x: 11, y: 12, z: 13 }}
       test "serializes correctly" $ do
-        equal (serialize nested r) l
+        equal l (serialize nestedB r)
       test "parses correctly" $ do
-        equal (_.r1 >>> R <$> (parse nested l)) (Just (R r.r1))
-        equal (_.r2 >>> R <$> (parse nested l)) (Just (R r.r2))
-
+        equal (Just (R r.r1)) (_.r1 >>> R <$> (parse nestedB l))
+        equal (Just (R r.r2)) (_.r2 >>> R <$> (parse nestedB l))
+    let
+      nestedB'
+        = buildRecord
+        $ addField (SProxy ∷ SProxy "r1") recordB
+        >>> addField (SProxy ∷ SProxy "r2") recordB
+    Test.Unit.suite "nested record boomboom build with combinators" $ do
+      let
+        l = ["1", "2", "3", "11", "12", "13"]
+        r = { r1: {x: 1, y: 2, z: 3}, r2: { x: 11, y: 12, z: 13 }}
+      test "serializes correctly" $ do
+        equal l (serialize nestedB r)
+      test "parses correctly" $ do
+        equal (_.r1 >>> R <$> (parse nestedB l)) (Just (R r.r1))
+        equal (_.r2 >>> R <$> (parse nestedB l)) (Just (R r.r2))
+    let
+      variantB
+        = buildVariant
+        $ addChoice (SProxy ∷ SProxy "two") (BoomBoom $ R <$> unwrap >- recordB)
+        >>> addChoice (SProxy ∷ SProxy "one") int
+        >>> addChoice (SProxy ∷ SProxy "zero") (BoomBoom $ pure unit)
+    Test.Unit.suite "simple variant boomboom" $ do
+      let
+        wrong = ["wrong", "8"]
+        z = ["zero"]
+        o = ["one", "1"]
+        t = ["two", "2", "3", "4"]
+        zv = inj (SProxy ∷ SProxy "zero") unit
+        ov = inj (SProxy ∷ SProxy "one") 1
+        tv = inj (SProxy ∷ SProxy "two") (R {x: 2, y: 3, z: 4})
+      test "serializes correctly" $ do
+        equal z (serialize variantB zv)
+        equal o (serialize variantB ov)
+        equal t (serialize variantB tv)
+      test "parses correctly" $ do
+        equal Nothing (parse variantB wrong)
+        equal (Just zv) (parse variantB z)
+        equal (Just ov) (parse variantB o)
+        equal (Just tv) (parse variantB t)

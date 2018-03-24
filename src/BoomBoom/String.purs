@@ -2,11 +2,13 @@ module BoomBoom.String where
 
 import Prelude
 
-import BoomBoom.Prim (BoomBoom(BoomBoom), BoomBoomD(BoomBoomD), BoomBoomSerFn, addChoice, lit) as Prim
+import BoomBoom.Prim (BoomBoom(BoomBoom), BoomBoomD(BoomBoomD), BoomBoomSerFn, addChoice) as Prim
 import Data.Array (singleton, uncons)
 import Data.Either (Either)
 import Data.Int (fromString)
+import Data.Maybe (Maybe(..))
 import Data.Variant (Variant)
+import Debug.Trace (traceAnyA)
 import Type.Prelude (class IsSymbol, SProxy, reflectSymbol)
 
 type BoomBoom a = Prim.BoomBoom (Array String) a
@@ -24,7 +26,7 @@ addChoice
       (Variant s')
       (Either (Variant r) (Array String))
       (Either (Variant r') (Array String))
-addChoice p = Prim.addChoice p (reflectSymbol >>> singleton)
+addChoice p = Prim.addChoice p (Prim.BoomBoom $ lit (reflectSymbol p))
 
 int ∷ BoomBoom Int
 int = Prim.BoomBoom $ Prim.BoomBoomD $
@@ -32,8 +34,16 @@ int = Prim.BoomBoom $ Prim.BoomBoomD $
   , ser: singleton <<< show
   }
 
-lit :: ∀ a'. String -> BoomBoomD a' Unit
-lit s = Prim.lit [s]
+lit ∷ ∀ a'. String -> BoomBoomD a' Unit
+lit tok = Prim.BoomBoomD
+  { prs: uncons >=> \{ head, tail } → if head == tok
+      then
+        Just { a: unit, tok: tail }
+      else
+        Nothing
+  , ser: const (singleton tok)
+  }
+
 
 string ∷ BoomBoom String
 string = Prim.BoomBoom $ Prim.BoomBoomD $

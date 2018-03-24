@@ -9,6 +9,7 @@ import Data.Monoid (class Monoid, mempty)
 import Data.Newtype (class Newtype)
 import Data.Record (get, insert)
 import Data.Variant (Variant, inj, on)
+import Debug.Trace (traceAnyA)
 import Partial.Unsafe (unsafeCrashWith)
 import Type.Prelude (class IsSymbol, class RowLacks, SProxy)
 
@@ -97,15 +98,9 @@ newtype BoomBoomSerFn tok a v v' = BoomBoomSerFn (BoomBoomD tok ((v → v') → 
 
 instance semigroupoidBoomBoomSerFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomSerFn tok a) where
   compose (BoomBoomSerFn (BoomBoomD b1)) (BoomBoomSerFn (BoomBoomD b2)) = BoomBoomSerFn $ BoomBoomD
-    { prs: \tok → b1.prs tok <|> b2.prs tok
+    { prs: \tok → b2.prs tok <|> b1.prs tok
     , ser: \a2c2t → b2.ser (\a2b → b1.ser (\b2c → a2c2t (a2b >>> b2c)))
     }
-
-lit ∷ ∀ tok a'. tok -> BoomBoomD tok a' Unit
-lit tok = BoomBoomD
-  { prs: const (Just { a: unit, tok })
-  , ser: const tok
-  }
 
 -- | Our category allows us to step by step
 -- | contract our variant:
@@ -123,26 +118,31 @@ addChoice
   ⇒ RowCons n a s s'
   ⇒ IsSymbol n
   ⇒ Semigroup tok
+  ⇒ Eq tok
   ⇒ SProxy n
   -- | Please provide unique prefix for this choice
   -- | so it can be parsed back.
-  → (SProxy n → tok)
+  → BoomBoom tok Unit
   → BoomBoom tok a
   -- | Don't worry about this result signature
   -- | just finish your variant build up chain with
   -- | `buildVariant` call and it will turn into nice
   -- | and friendly `BoomBoom`.
   → BoomBoomSerFn tok (Variant s') (Either (Variant r) tok) (Either (Variant r') tok)
-addChoice p prefix (BoomBoom (BoomBoomD b)) = BoomBoomSerFn $ (lit (prefix p) *> choice)
+addChoice p prefix (BoomBoom (BoomBoomD b)) = BoomBoomSerFn $ choice
   where
+  (BoomBoom (BoomBoomD prefix')) = prefix
   choice = BoomBoomD
-    { prs: b.prs >=> \{a, tok} → pure { a: inj p a, tok }
+    { prs: \t → do
+        {a, tok } ← prefix'.prs t
+        {a: a', tok: tok'} ← b.prs tok
+        pure { a: inj p a', tok: tok' }
     , ser: \a2eb2tok → a2eb2tok (case _ of
-        Left v → on p (Right <<< b.ser) Left v
+        Left v → on p (Right <<< (const (prefix'.ser unit) <> b.ser)) Left v
         Right tok → Right tok)
     }
 
--- | To clarify - we are getting a function here
+-- | We are getting a function
 -- | which returns `Either Void tok`
 -- | so we can just pick right from it:
 -- |
