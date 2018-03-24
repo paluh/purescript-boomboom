@@ -16,7 +16,9 @@ newtype BoomBoom tok a = BoomBoom (BoomBoomD tok tok a a)
 derive instance newtypeBoomBoom ∷ Newtype (BoomBoom tok a) _
 
 -- | __D__ from diverging as `a'` can diverge from `a`
--- | and `tok'` can diverge from tok
+-- | and `tok'` can diverge from tok.
+-- |
+-- | I hope that I drop this additional tok' soon
 newtype BoomBoomD tok' tok a' a = BoomBoomD
   { prs ∷ tok → Maybe { a ∷ a, tok ∷ tok }
   , ser ∷ a' → tok'
@@ -47,7 +49,7 @@ divergeA d (BoomBoom (BoomBoomD { prs, ser })) = BoomBoomD { prs, ser: d >>> ser
 
 infixl 5 divergeA as >-
 
-instance applyBoomBoomD ∷ (Semigroup tok) ⇒ Apply (BoomBoomD tok tok a') where
+instance applyBoomBoomD ∷ (Semigroup tok') ⇒ Apply (BoomBoomD tok' tok a') where
   apply (BoomBoomD b1) (BoomBoomD b2) = BoomBoomD { prs, ser }
     where
     prs t = do
@@ -78,16 +80,16 @@ instance altBoomBoom ∷ (Monoid tok) ⇒ Alt (BoomBoomD tok tok a') where
 newtype BoomBoomPrsAFn tok a r r' = BoomBoomPrsAFn (BoomBoomD tok tok a (r → r'))
 
 instance semigroupoidBoomBoomPrsAFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomPrsAFn tok a) where
-  compose (BoomBoomPrsAFn (BoomBoomD b1)) (BoomBoomPrsAFn (BoomBoomD b2)) = BoomBoomPrsAFn $ BoomBoomD $
+  compose (BoomBoomPrsAFn (BoomBoomD b1)) (BoomBoomPrsAFn (BoomBoomD b2)) = BoomBoomPrsAFn $ BoomBoomD
     { prs: \tok → do
-        {a: r, tok: tok'} ← b2.prs tok
-        {a: r', tok: tok''} ← b1.prs tok'
+        { a: r, tok: tok' } ← b2.prs tok
+        { a: r', tok: tok'' } ← b1.prs tok'
         pure {a: r' <<< r, tok: tok''}
     , ser: (<>) <$> b1.ser <*> b2.ser
     }
 
 instance categoryBoomBoomPrsAFn ∷ (Monoid tok) ⇒ Category (BoomBoomPrsAFn tok a) where
-  id = BoomBoomPrsAFn $ BoomBoomD $
+  id = BoomBoomPrsAFn $ BoomBoomD
     { prs: \tok → pure { a: id, tok }
     , ser: const mempty
     }
@@ -95,7 +97,7 @@ instance categoryBoomBoomPrsAFn ∷ (Monoid tok) ⇒ Category (BoomBoomPrsAFn to
 newtype BoomBoomSerTokFn tok a r r' = BoomBoomSerTokFn (BoomBoomD ((r' → tok) → tok) tok r a)
 
 instance semigroupoidBoomBoomSerTokFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomSerTokFn tok a) where
-  compose (BoomBoomSerTokFn (BoomBoomD b1)) (BoomBoomSerTokFn (BoomBoomD b2)) = BoomBoomSerTokFn $ BoomBoomD $
+  compose (BoomBoomSerTokFn (BoomBoomD b1)) (BoomBoomSerTokFn (BoomBoomD b2)) = BoomBoomSerTokFn $ BoomBoomD
     { prs: \tok → b1.prs tok <|> b2.prs tok
     , ser: \a c2t →
         b2.ser a \b →
@@ -103,19 +105,25 @@ instance semigroupoidBoomBoomSerTokFn ∷ (Semigroup tok) ⇒ Semigroupoid (Boom
             c2t c
     }
 
+-- lit ∷ forall t113 t114 t116. tok -> BoomBoomD t114 t113 t116 Unit
+-- lit tok = BoomBoomD
+--   { prs: \tok → Just { a: unit, tok }
+--   , ser: const tok
+--   }
+
 addChoice
-  ∷ forall t561 t578 t579 a r r' s s' n tok x y
+  ∷ forall a r r' s s' n tok
   . RowCons n a r r'
   ⇒ RowCons n a s s'
   ⇒ IsSymbol n
   ⇒ Semigroup tok
   ⇒ SProxy n
-  → (SProxy n → BoomBoomSerTokFn tok (Variant s') (Variant r') (Variant r'))
+  → (∀ i o. SProxy n → BoomBoomD i tok o Unit)
   → BoomBoom tok a
   → BoomBoomSerTokFn tok (Variant s') (Variant r') (Variant r)
-addChoice p lit (BoomBoom (BoomBoomD b)) = lit p >>> choice
+addChoice p lit (BoomBoom (BoomBoomD b)) = BoomBoomSerTokFn $ (lit p *> choice)
   where
-  choice = BoomBoomSerTokFn $ BoomBoomD $
+  choice = BoomBoomD
     { prs: b.prs >=> \{a, tok} → pure { a: inj p a, tok }
     , ser: \v c →
         (on p b.ser c) v
@@ -125,7 +133,7 @@ buildVariant
   ∷ ∀ a tok
   . BoomBoomSerTokFn tok a a (Variant ())
   → BoomBoom tok a
-buildVariant (BoomBoomSerTokFn (BoomBoomD {prs, ser})) = BoomBoom $ BoomBoomD $
+buildVariant (BoomBoomSerTokFn (BoomBoomD {prs, ser})) = BoomBoom $ BoomBoomD
   { prs
   , ser: \v → ser v case_
   }
@@ -139,7 +147,7 @@ addField ∷ ∀ a n r r' s s' tok
   ⇒ SProxy n
   → BoomBoom tok a
   → BoomBoomPrsAFn tok { | s'} { | r } { | r'}
-addField p (BoomBoom (BoomBoomD b)) = BoomBoomPrsAFn $ BoomBoomD $
+addField p (BoomBoom (BoomBoomD b)) = BoomBoomPrsAFn $ BoomBoomD
   { prs: \t → b.prs t <#> \{a, tok} →
       { a: \r → insert p a r, tok }
   , ser: \r → b.ser (get p r)
