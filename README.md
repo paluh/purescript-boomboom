@@ -72,9 +72,9 @@ Just { value0: { type: 'two', value: { x: 8, y: 9 } } }
 
 ## Credits
 
-* A lot if inspirations and crucial suggestions I've got from @MonoidMusician. Thanks!
+* A lot of inspirations and crucial suggestions I've got from @MonoidMusician. Thanks!
 
-* Initial design of diverging instances was inspired by this [sfvisser answer](https://www.reddit.com/r/haskell/comments/38o0f7/a_mixture_of_applicative_and_divisible/#thing_t1_crwh6le)
+* Initial design of diverging instances was inspired by this @sebastiaanvisser [answer](https://www.reddit.com/r/haskell/comments/38o0f7/a_mixture_of_applicative_and_divisible/#thing_t1_crwh6le)
 
-* Name loosely inspired by this @notcome [sebastiaanvisser](https://gist.github.com/notcome/c9d4c750985230d7e346)
+* Name loosely inspired by this @notcome [gist](https://gist.github.com/notcome/c9d4c750985230d7e346)
 
