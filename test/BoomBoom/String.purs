@@ -81,18 +81,34 @@ suite = do
     Test.Unit.suite "simple variant boomboom" $ do
       let
         wrong = ["wrong", "8"]
-        z = ["zero"]
-        o = ["one", "1"]
-        t = ["two", "2", "3", "4"]
+        zi = ["zero"]
+        oi = ["one", "1"]
+        ti = ["two", "2", "3", "4"]
         zv = inj (SProxy ∷ SProxy "zero") unit
         ov = inj (SProxy ∷ SProxy "one") 1
         tv = inj (SProxy ∷ SProxy "two") (R {x: 2, y: 3, z: 4})
       test "serializes correctly" $ do
-        equal z (serialize variantB zv)
-        equal o (serialize variantB ov)
-        equal t (serialize variantB tv)
+        equal zi (serialize variantB zv)
+        equal oi (serialize variantB ov)
+        equal ti (serialize variantB tv)
       test "parses correctly" $ do
         equal Nothing (parse variantB wrong)
-        equal (Just zv) (parse variantB z)
-        equal (Just ov) (parse variantB o)
-        equal (Just tv) (parse variantB t)
+        equal (Just zv) (parse variantB zi)
+        equal (Just ov) (parse variantB oi)
+        equal (Just tv) (parse variantB ti)
+
+    let
+      nestedVariantB
+        = buildVariant
+        $ addChoice (SProxy ∷ SProxy "record") (BoomBoom $ R <$> unwrap >- recordB)
+        >>> addChoice (SProxy ∷ SProxy "variant") variantB
+        >>> addChoice (SProxy ∷ SProxy "unit") (BoomBoom $ pure unit)
+
+    Test.Unit.suite "nested variant boomboom" $ do
+      let
+        vi = ["variant", "two", "2", "3", "4"]
+        vv = inj (SProxy ∷ SProxy "variant") (inj (SProxy ∷ SProxy "two") (R {x: 2, y: 3, z: 4}))
+      test "serializes correctly" $ do
+        equal vi (serialize nestedVariantB vv)
+      test "parses correctly" $ do
+        equal (Just vv) (parse nestedVariantB vi)

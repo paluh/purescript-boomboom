@@ -23,6 +23,7 @@ derive instance newtypeBoomBoom ∷ Newtype (BoomBoom tok a) _
 -- |
 -- | I hope that I drop this additional tok' soon
 newtype BoomBoomD tok a' a = BoomBoomD
+  -- | Should I wrap this in some parser type?
   { prs ∷ tok → Maybe { a ∷ a, tok ∷ tok }
   , ser ∷ a' → tok
   }
@@ -168,6 +169,8 @@ addField ∷ ∀ a n r r' s s' tok
   → BoomBoom tok a
   → BoomBoomPrsAFn tok { | s'} { | r } { | r'}
 addField p (BoomBoom (BoomBoomD b)) = BoomBoomPrsAFn $ BoomBoomD
+  -- | XXX: Let's move to Data.Record.Builder
+  -- | in next release
   { prs: \t → b.prs t <#> \{a, tok} →
       { a: \r → insert p a r, tok }
   , ser: \r → b.ser (get p r)
