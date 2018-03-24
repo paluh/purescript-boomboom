@@ -72,6 +72,10 @@ instance altBoomBoom ∷ (Monoid tok) ⇒ Alt (BoomBoomD tok a') where
 -- | Enter the world of two categories which fully keep track of
 -- | `BoomBoom` divergence and allow us define nice combinators
 -- | for variant and record build up.
+-- |
+-- | You should not really worry about these two types because
+-- | their are underlying machinery for higher level
+-- | combinators `addChoice`/`buildVariant` and `addField`/`buildRecord`.
 newtype BoomBoomPrsAFn tok a r r' = BoomBoomPrsAFn (BoomBoomD tok a (r → r'))
 
 instance semigroupoidBoomBoomPrsAFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomPrsAFn tok a) where
@@ -80,7 +84,7 @@ instance semigroupoidBoomBoomPrsAFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBo
         { a: r, tok: tok' } ← b2.prs tok
         { a: r', tok: tok'' } ← b1.prs tok'
         pure {a: r' <<< r, tok: tok''}
-    , ser: (<>) <$> b1.ser <*> b2.ser
+    , ser: (<>) <$> b2.ser <*> b1.ser
     }
 
 instance categoryBoomBoomPrsAFn ∷ (Monoid tok) ⇒ Category (BoomBoomPrsAFn tok a) where
@@ -120,10 +124,16 @@ addChoice
   ⇒ IsSymbol n
   ⇒ Semigroup tok
   ⇒ SProxy n
-  -- → (∀ a'. SProxy n → BoomBoomD tok a' Unit)
+  -- | Please provide unique prefix for this choice
+  -- | so it can be parsed back.
+  → (SProxy n → tok)
   → BoomBoom tok a
+  -- | Don't worry about this result signature
+  -- | just finish your variant build up chain with
+  -- | `buildVariant` call and it will turn into nice
+  -- | and friendly `BoomBoom`.
   → BoomBoomSerFn tok (Variant s') (Either (Variant r) tok) (Either (Variant r') tok)
-addChoice p (BoomBoom (BoomBoomD b)) = BoomBoomSerFn $ choice -- (lit p *> choice)
+addChoice p prefix (BoomBoom (BoomBoomD b)) = BoomBoomSerFn $ (lit (prefix p) *> choice)
   where
   choice = BoomBoomD
     { prs: b.prs >=> \{a, tok} → pure { a: inj p a, tok }
@@ -132,6 +142,10 @@ addChoice p (BoomBoom (BoomBoomD b)) = BoomBoomSerFn $ choice -- (lit p *> choic
         Right tok → Right tok)
     }
 
+-- | To clarify - we are getting a function here
+-- | which returns `Either Void tok`
+-- | so we can just pick right from it:
+-- |
 -- | ser ∷ (((Either (Variant r) tok → Either (Variant ()) tok) → tok) → tok)
 buildVariant
   ∷ ∀ tok r
