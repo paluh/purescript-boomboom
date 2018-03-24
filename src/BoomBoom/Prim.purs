@@ -3,28 +3,30 @@ module BoomBoom.Prim where
 import Prelude
 
 import Control.Alt (class Alt, (<|>))
+import Data.Either (Either(Right, Left))
 import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
 import Data.Newtype (class Newtype)
 import Data.Record (get, insert)
-import Data.Variant (Variant, case_, inj, on)
+import Data.Variant (Variant, inj, on)
+import Partial.Unsafe (unsafeCrashWith)
 import Type.Prelude (class IsSymbol, class RowLacks, SProxy)
 
 -- | Our core type - nearly an iso:
 -- | `{ ser: a → tok, prs: tok → Maybe a }`
-newtype BoomBoom tok a = BoomBoom (BoomBoomD tok tok a a)
+newtype BoomBoom tok a = BoomBoom (BoomBoomD tok a a)
 derive instance newtypeBoomBoom ∷ Newtype (BoomBoom tok a) _
 
 -- | __D__ from diverging as `a'` can diverge from `a`
 -- | and `tok'` can diverge from tok.
 -- |
 -- | I hope that I drop this additional tok' soon
-newtype BoomBoomD tok' tok a' a = BoomBoomD
+newtype BoomBoomD tok a' a = BoomBoomD
   { prs ∷ tok → Maybe { a ∷ a, tok ∷ tok }
-  , ser ∷ a' → tok'
+  , ser ∷ a' → tok
   }
-derive instance newtypeBoomBoomD ∷ Newtype (BoomBoomD tok' tok a' a) _
-derive instance functorBoomBoomD ∷ Functor (BoomBoomD tok' tok a')
+derive instance newtypeBoomBoomD ∷ Newtype (BoomBoomD tok a' a) _
+derive instance functorBoomBoomD ∷ Functor (BoomBoomD tok a')
 
 -- | `divergeA` together with `BoomBoomD` `Applicative`
 -- | instance form quite nice API to create by hand
@@ -44,12 +46,12 @@ derive instance functorBoomBoomD ∷ Functor (BoomBoomD tok' tok a')
 -- | Probably there are case where you want
 -- | it so here it is.
 -- |
-divergeA ∷ ∀ a a' tok. (a' → a) → BoomBoom tok a → BoomBoomD tok tok a' a
+divergeA ∷ ∀ a a' tok. (a' → a) → BoomBoom tok a → BoomBoomD tok a' a
 divergeA d (BoomBoom (BoomBoomD { prs, ser })) = BoomBoomD { prs, ser: d >>> ser }
 
 infixl 5 divergeA as >-
 
-instance applyBoomBoomD ∷ (Semigroup tok') ⇒ Apply (BoomBoomD tok' tok a') where
+instance applyBoomBoomD ∷ (Semigroup tok) ⇒ Apply (BoomBoomD tok a') where
   apply (BoomBoomD b1) (BoomBoomD b2) = BoomBoomD { prs, ser }
     where
     prs t = do
@@ -58,14 +60,14 @@ instance applyBoomBoomD ∷ (Semigroup tok') ⇒ Apply (BoomBoomD tok' tok a') w
       pure { a: f a, tok: t'' }
     ser = (<>) <$> b1.ser <*> b2.ser
 
-instance applicativeBoomBoomD ∷ (Monoid tok) ⇒ Applicative (BoomBoomD tok tok a') where
+instance applicativeBoomBoomD ∷ (Monoid tok) ⇒ Applicative (BoomBoomD tok a') where
   pure a = BoomBoomD { prs: pure <<< const { a, tok: mempty }, ser: const mempty }
 
 -- | This `Alt` instance is also somewhat dangerous - it allows
 -- | you to define inconsistent `BoomBoom` in case for example
 -- | of your sum type so you can get `tok's` `mempty` as a result
 -- | of serialization which is not parsable.
-instance altBoomBoom ∷ (Monoid tok) ⇒ Alt (BoomBoomD tok tok a') where
+instance altBoomBoom ∷ (Monoid tok) ⇒ Alt (BoomBoomD tok a') where
   alt (BoomBoomD b1) (BoomBoomD b2) = BoomBoomD { prs, ser }
     where
     -- | Piece of premature optimization ;-)
@@ -77,7 +79,7 @@ instance altBoomBoom ∷ (Monoid tok) ⇒ Alt (BoomBoomD tok tok a') where
 -- | Enter the world of two categories which fully keep track of
 -- | `BoomBoom` divergence and allow us define constructors
 -- | for secure record and variant `BoomBooms`.
-newtype BoomBoomPrsAFn tok a r r' = BoomBoomPrsAFn (BoomBoomD tok tok a (r → r'))
+newtype BoomBoomPrsAFn tok a r r' = BoomBoomPrsAFn (BoomBoomD tok a (r → r'))
 
 instance semigroupoidBoomBoomPrsAFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomPrsAFn tok a) where
   compose (BoomBoomPrsAFn (BoomBoomD b1)) (BoomBoomPrsAFn (BoomBoomD b2)) = BoomBoomPrsAFn $ BoomBoomD
@@ -94,48 +96,59 @@ instance categoryBoomBoomPrsAFn ∷ (Monoid tok) ⇒ Category (BoomBoomPrsAFn to
     , ser: const mempty
     }
 
-newtype BoomBoomSerTokFn tok a r r' = BoomBoomSerTokFn (BoomBoomD ((r' → tok) → tok) tok r a)
+newtype BoomBoomSerTokFn tok a v v' = BoomBoomSerTokFn (BoomBoomD tok ((v → v') → tok) a)
 
 instance semigroupoidBoomBoomSerTokFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomSerTokFn tok a) where
   compose (BoomBoomSerTokFn (BoomBoomD b1)) (BoomBoomSerTokFn (BoomBoomD b2)) = BoomBoomSerTokFn $ BoomBoomD
     { prs: \tok → b1.prs tok <|> b2.prs tok
-    , ser: \a c2t →
-        b2.ser a \b →
-          b1.ser b \c →
-            c2t c
+    , ser: \a2c2t → b2.ser (\a2b → b1.ser (\b2c → a2c2t (a2b >>> b2c)))
     }
 
--- lit ∷ forall t113 t114 t116. tok -> BoomBoomD t114 t113 t116 Unit
--- lit tok = BoomBoomD
---   { prs: \tok → Just { a: unit, tok }
---   , ser: const tok
---   }
+lit ∷ ∀ tok a'. tok -> BoomBoomD tok a' Unit
+lit tok = BoomBoomD
+  { prs: const (Just { a: unit, tok })
+  , ser: const tok
+  }
 
+-- | Our category allows us to step by step
+-- | contract our variant:
+-- |
+-- |     (((Either a tok → Either b tok) → tok) → tok)
+-- | >>> (((Either b tok → Either c tok) → tok) → tok)
+-- | =   (((Either a tok → Either c tok) → tok) → tok)
+-- |
+-- | Where `a, b, c` is our contracting variant
+-- | series.
+-- |
 addChoice
   ∷ forall a r r' s s' n tok
-  . RowCons n a r r'
+  . RowCons n a r' r
   ⇒ RowCons n a s s'
   ⇒ IsSymbol n
   ⇒ Semigroup tok
   ⇒ SProxy n
-  → (∀ i o. SProxy n → BoomBoomD i tok o Unit)
+  -- → (∀ a'. SProxy n → BoomBoomD tok a' Unit)
   → BoomBoom tok a
-  → BoomBoomSerTokFn tok (Variant s') (Variant r') (Variant r)
-addChoice p lit (BoomBoom (BoomBoomD b)) = BoomBoomSerTokFn $ (lit p *> choice)
+  → BoomBoomSerTokFn tok (Variant s') (Either (Variant r) tok) (Either (Variant r') tok)
+addChoice p (BoomBoom (BoomBoomD b)) = BoomBoomSerTokFn $ choice -- (lit p *> choice)
   where
   choice = BoomBoomD
     { prs: b.prs >=> \{a, tok} → pure { a: inj p a, tok }
-    , ser: \v c →
-        (on p b.ser c) v
+    , ser: \a2eb2tok → a2eb2tok (case _ of
+        Left v → on p (Right <<< b.ser) Left v
+        Right tok → Right tok)
     }
 
+-- | ser ∷ (((Either (Variant r) tok → Either (Variant ()) tok) → tok) → tok)
 buildVariant
-  ∷ ∀ a tok
-  . BoomBoomSerTokFn tok a a (Variant ())
-  → BoomBoom tok a
+  ∷ ∀ tok r
+  . BoomBoomSerTokFn tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)
+  → BoomBoom tok (Variant r)
 buildVariant (BoomBoomSerTokFn (BoomBoomD {prs, ser})) = BoomBoom $ BoomBoomD
   { prs
-  , ser: \v → ser v case_
+  , ser: \v → ser (\a2t2t → (case (a2t2t (Left v)) of
+      (Left _) → unsafeCrashWith "BoomBoom.Prim.buildVariant: empty variant?"
+      (Right tok) → tok))
   }
 
 addField ∷ ∀ a n r r' s s' tok
