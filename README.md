@@ -13,7 +13,7 @@ Pre α stage... docs too.
 The core type of this library is `BoomBoom.Prim.BoomBoom` which translates really to this simple record:
 
 ```purescript
-newtype BoomBoom tok a = BoomBoom { prs: tok → Maybe a, ser: a → ser }
+newtype BoomBoom tok a = BoomBoom { prs: tok → Maybe a, ser: a → tok }
 ```
 
 So our `BoomBoom tok a` is a simple parser from `tok` to `a` and also a total serializer function in oposite direction.
