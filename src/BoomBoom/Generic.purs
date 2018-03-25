@@ -1,12 +1,11 @@
 module BoomBoom.Generic where
 
-import Prelude
+import BoomBoom
 
-import BoomBoom.Prim (BoomBoom, RecordBuilder(..), VariantBuilder, addChoice, addField, buildRecord, buildVariant)
-import Data.Either (Either)
-import Data.Monoid (class Monoid)
-import Data.Record (get)
+import Data.Monoid (class Monoid, class Semigroup)
+import Data.Record as R
 import Data.Variant (Variant)
+import Prelude (class Eq, Unit)
 import Type.Prelude (class IsSymbol, class RowLacks, class RowToList, RLProxy(..), SProxy(..))
 import Type.Row (Cons, Nil)
 
@@ -14,93 +13,60 @@ import Type.Row (Cons, Nil)
 -- | `irl` - input row list which "traverses" given record
 -- | `tok` - serialization output (parsing input) - required to generate variant prefix
 -- | `builder` - final `BoomBoom` builder
-class VariantBoomBoom irl ir tok builder | irl → tok, irl → builder where
-  variantImpl ∷ RLProxy irl → (∀ n. IsSymbol n ⇒ SProxy n → BoomBoom tok Unit) → {|ir} → builder
+class VariantBoomBoom irl ir tok cases | irl → ir tok cases where
+  variantImpl ∷ RLProxy irl → (∀ n. IsSymbol n ⇒ SProxy n → BoomBoom tok Unit) → Record ir → BoomBoom tok (Variant cases)
 
-instance a_variantSingleton
-  ∷ ( RowCons n (BoomBoom tok fb) ir' ir
-    , RowCons n fb p p'
-    , RowCons n fb s s'
-    , IsSymbol n
-    , Semigroup tok
-    , Eq tok
-    )
-  ⇒ VariantBoomBoom
-      (Cons n (BoomBoom tok fb) Nil)
-      ir
-      tok
-      (VariantBuilder tok (Variant p') (Either (Variant s') tok) (Either (Variant s) tok))
-  where
-  variantImpl _ toPrefix r = addChoice _n p (get _n r)
-    where
-    _n = SProxy ∷ SProxy n
-    p = toPrefix _n
+instance variantNil :: VariantBoomBoom Nil ir tok () where
+  variantImpl _ _ _ = baseCase
 
-instance b_variantCons
-  ∷ ( RowCons n (BoomBoom tok fb) ir' ir
-    , RowCons n fb p p'
-    , RowCons n fb s s'
-    , IsSymbol n
-    , Semigroup tok
-    , Eq tok
-    , VariantBoomBoom tail ir tok (VariantBuilder tok (Variant p') (Either (Variant s'') tok) (Either (Variant s') tok))
-    )
-  ⇒ VariantBoomBoom
-      (Cons n (BoomBoom tok fb) tail)
-      ir
-      tok
-      (VariantBuilder tok (Variant p') (Either (Variant s'') tok) (Either (Variant s) tok))
-  where
-  variantImpl _ toPrefix r = addChoice _n p (get _n r) <<< tail
-    where
-    _n = SProxy ∷ SProxy n
-    p = toPrefix _n
-    _irl = RLProxy ∷ RLProxy tail
-    tail = variantImpl _irl toPrefix r
+instance variantCons ::
+  ( IsSymbol s
+  , Semigroup tok
+  , RowCons s (BoomBoom tok t) ir' ir
+  , RowCons s t cases cases'
+  , RowLacks s cases
+  , Union cases u cases'
+  , VariantBoomBoom irl ir tok cases
+  ) => VariantBoomBoom (Cons s (BoomBoom tok t) irl) ir tok cases' where
+    variantImpl _ toPrefix ir = addCase s (toPrefix s `seqR` R.get s ir)
+      (variantImpl (RLProxy :: RLProxy irl) toPrefix ir)
+      where s = SProxy :: SProxy s
 
 variant
-  ∷ ∀ r rl r' tok
-  . RowToList r rl
-  ⇒ VariantBoomBoom rl r tok (VariantBuilder tok (Variant r') (Either (Variant r') tok) (Either (Variant ()) tok))
+  ∷ ∀ irl ir tok cases
+  . RowToList ir irl
+  ⇒ VariantBoomBoom irl ir tok cases
   ⇒ (∀ n. IsSymbol n ⇒ SProxy n → BoomBoom tok Unit)
-  → {|r}
-  → BoomBoom tok (Variant r')
-variant toPrefix r = buildVariant (variantImpl (RLProxy ∷ RLProxy rl) toPrefix r)
-
+  → Record ir
+  → BoomBoomV tok cases
+variant toPrefix r = variantImpl (RLProxy ∷ RLProxy irl) toPrefix r
 
 -- | `ir` - input record with `BoomBooms` as fields
 -- | `irl` - input row list which "traverses" given record
 -- | `builder` - final `BoomBoom` builder
-class RecordBoomBoom irl ir builder | irl → builder where
-  recordImpl ∷ RLProxy irl → {|ir} → builder
+class RecordBoomBoom irl ir tok fields | irl → ir tok fields where
+  recordImpl ∷ RLProxy irl → Record ir → BoomBoom tok (Record fields)
 
-instance a_recordNil ∷ (Monoid tok) ⇒ RecordBoomBoom Nil ir (RecordBuilder tok s p p) where
-  recordImpl _ _ = id
+instance recordNil :: (Eq tok, Monoid tok) => RecordBoomBoom Nil ir tok () where
+  recordImpl _ _ = end
 
-instance b_recordCons
-  ∷ ( RowCons n (BoomBoom tok b) ir' ir
-    , RowCons n b p p'
-    , RowLacks n p
-    , RowCons n b s s'
-    , RowLacks n s
-    , IsSymbol n
-    , Semigroup tok
-    , RecordBoomBoom tail ir (RecordBuilder tok {|s'} {|p'} {|p''})
-    )
-  ⇒ RecordBoomBoom
-      (Cons n (BoomBoom tok b) tail)
-      ir
-      (RecordBuilder tok {|s'} {|p} {|p''})
-  where
-  recordImpl _ r = addField _n (get _n r) >>> tail
-    where
-    _n = SProxy ∷ SProxy n
-    tail = recordImpl (RLProxy ∷ RLProxy tail) r
+instance recordCons ::
+  ( IsSymbol s
+  , RowCons s (BoomBoom tok t) ir' ir
+  , RowCons s t fields fields'
+  , RowLacks s fields
+  , Semigroup tok
+  , RecordBoomBoom irl ir tok fields
+  ) => RecordBoomBoom (Cons s (BoomBoom tok t) irl) ir tok fields' where
+    recordImpl _ r = addFieldBefore s (R.get s r) tail
+      where
+      s = SProxy ∷ SProxy s
+      tail = recordImpl (RLProxy ∷ RLProxy irl) r
 
 record
-  ∷ ∀ p r rl tok
-  . RowToList r rl
-  ⇒ RecordBoomBoom rl r (RecordBuilder tok {|p} {} {|p})
-  ⇒ {|r}
-  → BoomBoom tok {|p}
-record r = buildRecord (recordImpl (RLProxy ∷ RLProxy rl) r)
+  ∷ ∀ irl ir tok fields
+  . RowToList ir irl
+  ⇒ RecordBoomBoom irl ir tok fields
+  ⇒ Record ir
+  → BoomBoomR tok fields
+record = recordImpl (RLProxy ∷ RLProxy irl)

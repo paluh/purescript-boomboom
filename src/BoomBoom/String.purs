@@ -2,52 +2,76 @@ module BoomBoom.String where
 
 import Prelude
 
-import BoomBoom.Generic (class VariantBoomBoom)
-import BoomBoom.Generic (variant) as Generic
-import BoomBoom.Prim (BoomBoom(BoomBoom), BoomBoomD(BoomBoomD), addChoice) as Prim
-import BoomBoom.Prim (VariantBuilder)
-import Data.Array (singleton, uncons)
-import Data.Either (Either)
+import BoomBoom as BB
 import Data.Int (fromString)
+import Data.List (List, Pattern(..), singleton, uncons)
+import Data.List as List
 import Data.Maybe (Maybe(..))
+import Data.Newtype (unwrap)
+import Data.String as String
 import Data.Variant (Variant)
-import Type.Prelude (class IsSymbol, class RowToList, SProxy, reflectSymbol)
+import Type.Prelude (class IsSymbol, class RowLacks, SProxy, reflectSymbol)
 
-type Tok = Array String
-type BoomBoom a = Prim.BoomBoom Tok a
-type BoomBoomD a' a = Prim.BoomBoomD Tok a' a
+type Tok = List String
+type BoomBoom a = BB.BoomBoom Tok a
+type BoomBoomD a' a = BB.BoomBoomD Tok a' a
+type BoomBoomR r = BB.BoomBoomR Tok r
+type BoomBoomV r = BB.BoomBoomV Tok r
+
+addStringPrefix ::
+  forall a.
+  String.Pattern ->
+  BB.BoomBoom String a ->
+  BB.BoomBoom String a
+addStringPrefix l (BB.BoomBoom (BB.BoomBoomD this)) = BB.BoomBoom $ BB.BoomBoomD
+  { prs: \tok -> String.stripPrefix l tok >>= this.prs
+  , ser: \a -> this.ser a <> unwrap l
+  }
+
+addStringSuffix ::
+  forall a.
+  String.Pattern ->
+  BB.BoomBoom String a ->
+  BB.BoomBoom String a
+addStringSuffix l (BB.BoomBoom (BB.BoomBoomD this)) = BB.BoomBoom $ BB.BoomBoomD
+  { prs: this.prs >=> \{ a, tok } ->
+      String.stripPrefix l tok <#> \tok' -> { a, tok: tok' }
+  , ser: \a -> this.ser a <> unwrap l
+  }
+
+addListPrefix ::
+  forall p a.
+    Eq p =>
+  List.Pattern p ->
+  BB.BoomBoom (List.List p) a ->
+  BB.BoomBoom (List.List p) a
+addListPrefix l (BB.BoomBoom (BB.BoomBoomD this)) = BB.BoomBoom $ BB.BoomBoomD
+  { prs: \tok -> List.stripPrefix l tok >>= this.prs
+  , ser: \a -> unwrap l <> this.ser a
+  }
 
 
-addChoice
-  ∷ forall a r r' s s' n
+addPrefixedCase
+  ∷ forall a r u r' n
   . RowCons n a r' r
-  ⇒ RowCons n a s s'
+  ⇒ RowLacks n r'
+  ⇒ Union r' u r
   ⇒ IsSymbol n
   ⇒ SProxy n
   → BoomBoom a
-  → VariantBuilder
-      Tok
-      (Variant s')
-      (Either (Variant r) Tok)
-      (Either (Variant r') Tok)
-addChoice p = Prim.addChoice p (_lit p)
-
-variant
-  ∷ ∀ r rl r'
-  . RowToList r rl
-  ⇒ VariantBoomBoom rl r Tok (VariantBuilder Tok (Variant r') (Either (Variant r') Tok) (Either (Variant ()) Tok))
-  ⇒ {|r}
   → BoomBoom (Variant r')
-variant = Generic.variant _lit
+  → BoomBoom (Variant r)
+addPrefixedCase p = BB.addCase p <<< addListPrefix
+  (Pattern (singleton (reflectSymbol p)))
 
 int ∷ BoomBoom Int
-int = Prim.BoomBoom $ Prim.BoomBoomD $
+int = BB.BoomBoom $ BB.BoomBoomD $
   { prs: uncons >=> (\{ head, tail } → { a: _, tok: tail } <$> fromString head)
   , ser: singleton <<< show
   }
 
 litD ∷ ∀ a'. String -> BoomBoomD a' Unit
-litD tok = Prim.BoomBoomD
+litD tok = BB.BoomBoomD
   { prs: uncons >=> \{ head, tail } → if head == tok
       then
         Just { a: unit, tok: tail }
@@ -57,17 +81,16 @@ litD tok = Prim.BoomBoomD
   }
 
 lit ∷ String -> BoomBoom Unit
-lit = Prim.BoomBoom <<< litD
+lit = BB.BoomBoom <<< litD
 
 _litD ∷ ∀ a' n. IsSymbol n ⇒ SProxy n → BoomBoomD a' Unit
 _litD = litD <<< reflectSymbol
 
 _lit ∷ ∀ n. IsSymbol n ⇒ SProxy n → BoomBoom Unit
-_lit = Prim.BoomBoom <<< _litD
+_lit = BB.BoomBoom <<< _litD
 
 string ∷ BoomBoom String
-string = Prim.BoomBoom $ Prim.BoomBoomD $
+string = BB.BoomBoom $ BB.BoomBoomD $
   { prs: uncons >=> (\{ head, tail } → pure { a: head, tok: tail })
   , ser: singleton
   }
-
