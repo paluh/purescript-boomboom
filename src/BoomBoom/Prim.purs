@@ -6,10 +6,9 @@ import Control.Alt (class Alt, (<|>))
 import Data.Either (Either(Right, Left))
 import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
-import Data.Newtype (class Newtype)
+import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Record (get, insert)
 import Data.Variant (Variant, inj, on)
-import Debug.Trace (traceAnyA)
 import Partial.Unsafe (unsafeCrashWith)
 import Type.Prelude (class IsSymbol, class RowLacks, SProxy)
 
@@ -18,12 +17,11 @@ import Type.Prelude (class IsSymbol, class RowLacks, SProxy)
 newtype BoomBoom tok a = BoomBoom (BoomBoomD tok a a)
 derive instance newtypeBoomBoom ∷ Newtype (BoomBoom tok a) _
 
--- | __D__ from diverging as `a'` can diverge from `a`
--- | and `tok'` can diverge from tok.
--- |
--- | I hope that I drop this additional tok' soon
+-- | __D__ from diverging as `a'` can diverge from `a`.
+-- | It is enough to express `Applicative` for parsing
+-- | and two `Semigroupoids` in both directions (`ser` and `prs`).
 newtype BoomBoomD tok a' a = BoomBoomD
-  -- | Should I wrap this in some parser type?
+  -- | Should I wrap this function in some parser type?
   { prs ∷ tok → Maybe { a ∷ a, tok ∷ tok }
   , ser ∷ a' → tok
   }
@@ -41,6 +39,13 @@ derive instance functorBoomBoomD ∷ Functor (BoomBoomD tok a')
 -- |   <* lit "/"
 -- |   <*> _.y >- int
 -- |
+-- | It can be tedious and leaves responsibility to accordingly
+-- | pick and create elements of a product. For example I could
+-- | easily replace `_.x` with `_.y` (and get two `_.y`) by mistake
+-- | and it won't be detected by compiler.
+-- |
+-- | There is helper defined down below which handles record
+-- | case more securely.
 divergeA ∷ ∀ a a' tok. (a' → a) → BoomBoom tok a → BoomBoomD tok a' a
 divergeA d (BoomBoom (BoomBoomD { prs, ser })) = BoomBoomD { prs, ser: d >>> ser }
 
@@ -78,10 +83,10 @@ instance altBoomBoom ∷ (Monoid tok) ⇒ Alt (BoomBoomD tok a') where
 -- | You should not really worry about these two types because
 -- | their are underlying machinery for higher level
 -- | combinators `addChoice`/`buildVariant` and `addField`/`buildRecord`.
-newtype BoomBoomPrsAFn tok a r r' = BoomBoomPrsAFn (BoomBoomD tok a (r → r'))
+newtype RecordBuilder tok a r r' = RecordBuilder (BoomBoomD tok a (r → r'))
 
-instance semigroupoidBoomBoomPrsAFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomPrsAFn tok a) where
-  compose (BoomBoomPrsAFn (BoomBoomD b1)) (BoomBoomPrsAFn (BoomBoomD b2)) = BoomBoomPrsAFn $ BoomBoomD
+instance semigroupoidRecordBuilder ∷ (Semigroup tok) ⇒ Semigroupoid (RecordBuilder tok a) where
+  compose (RecordBuilder (BoomBoomD b1)) (RecordBuilder (BoomBoomD b2)) = RecordBuilder $ BoomBoomD
     { prs: \tok → do
         { a: r, tok: tok' } ← b2.prs tok
         { a: r', tok: tok'' } ← b1.prs tok'
@@ -89,16 +94,23 @@ instance semigroupoidBoomBoomPrsAFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBo
     , ser: (<>) <$> b2.ser <*> b1.ser
     }
 
-instance categoryBoomBoomPrsAFn ∷ (Monoid tok) ⇒ Category (BoomBoomPrsAFn tok a) where
-  id = BoomBoomPrsAFn $ BoomBoomD
+instance categoryRecordBuilder ∷ (Monoid tok) ⇒ Category (RecordBuilder tok a) where
+  id = RecordBuilder $ BoomBoomD
     { prs: \tok → pure { a: id, tok }
     , ser: const mempty
     }
 
-newtype BoomBoomSerFn tok a v v' = BoomBoomSerFn (BoomBoomD tok ((v → v') → tok) a)
+-- | For sure serializer could be expressed much easier
+-- | (like: `a → (b → t) → t`) but we want to use
+-- | `BooBoomD` for this and we've got `ser: a'-> tok`
+-- | with moving `a'` part to our disposition. So welcome in:
+-- |        __The Callback Hell__
+-- |
+-- |...don't worry it is just plumbing ;-)
+newtype VariantBuilder tok a v v' = VariantBuilder (BoomBoomD tok ((v → v') → tok) a)
 
-instance semigroupoidBoomBoomSerFn ∷ (Semigroup tok) ⇒ Semigroupoid (BoomBoomSerFn tok a) where
-  compose (BoomBoomSerFn (BoomBoomD b1)) (BoomBoomSerFn (BoomBoomD b2)) = BoomBoomSerFn $ BoomBoomD
+instance semigroupoidVariantBuilder ∷ (Semigroup tok) ⇒ Semigroupoid (VariantBuilder tok a) where
+  compose (VariantBuilder (BoomBoomD b1)) (VariantBuilder (BoomBoomD b2)) = VariantBuilder $ BoomBoomD
     { prs: \tok → b2.prs tok <|> b1.prs tok
     , ser: \a2c2t → b2.ser (\a2b → b1.ser (\b2c → a2c2t (a2b >>> b2c)))
     }
@@ -129,8 +141,8 @@ addChoice
   -- | just finish your variant build up chain with
   -- | `buildVariant` call and it will turn into nice
   -- | and friendly `BoomBoom`.
-  → BoomBoomSerFn tok (Variant s') (Either (Variant r) tok) (Either (Variant r') tok)
-addChoice p prefix (BoomBoom (BoomBoomD b)) = BoomBoomSerFn $ choice
+  → VariantBuilder tok (Variant s') (Either (Variant r) tok) (Either (Variant r') tok)
+addChoice p prefix (BoomBoom (BoomBoomD b)) = VariantBuilder $ choice
   where
   (BoomBoom (BoomBoomD prefix')) = prefix
   choice = BoomBoomD
@@ -143,32 +155,31 @@ addChoice p prefix (BoomBoom (BoomBoomD b)) = BoomBoomSerFn $ choice
         Right tok → Right tok)
     }
 
--- | We are getting a function
--- | which returns `Either Void tok`
--- | so we can just pick right from it:
+-- | We are getting our final serializer here - a function which returns
+-- | `Either Void tok` so we can just pick right thing from it:
 -- |
 -- | ser ∷ (((Either (Variant r) tok → Either (Variant ()) tok) → tok) → tok)
 buildVariant
   ∷ ∀ tok r
-  . BoomBoomSerFn tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)
+  . VariantBuilder tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)
   → BoomBoom tok (Variant r)
-buildVariant (BoomBoomSerFn (BoomBoomD {prs, ser})) = BoomBoom $ BoomBoomD
+buildVariant (VariantBuilder (BoomBoomD {prs, ser})) = BoomBoom $ BoomBoomD
   { prs
   , ser: \v → ser (\a2t2t → (case (a2t2t (Left v)) of
       (Left _) → unsafeCrashWith "BoomBoom.Prim.buildVariant: empty variant?"
       (Right tok) → tok))
   }
 
-addField ∷ ∀ a n r r' s s' tok
+addField ∷ ∀ a n p p' s s' tok
   . RowCons n a s s'
   ⇒ RowLacks n s
-  ⇒ RowCons n a r r'
-  ⇒ RowLacks n r
+  ⇒ RowCons n a p p'
+  ⇒ RowLacks n p
   ⇒ IsSymbol n
   ⇒ SProxy n
   → BoomBoom tok a
-  → BoomBoomPrsAFn tok { | s'} { | r } { | r'}
-addField p (BoomBoom (BoomBoomD b)) = BoomBoomPrsAFn $ BoomBoomD
+  → RecordBuilder tok {|s'} {|p} {|p'}
+addField p (BoomBoom (BoomBoomD b)) = RecordBuilder $ BoomBoomD
   -- | XXX: Let's move to Data.Record.Builder
   -- | in next release
   { prs: \t → b.prs t <#> \{a, tok} →
@@ -178,9 +189,9 @@ addField p (BoomBoom (BoomBoomD b)) = BoomBoomPrsAFn $ BoomBoomD
 
 buildRecord
   ∷ ∀ r tok
-  . BoomBoomPrsAFn tok r {} r
+  . RecordBuilder tok r {} r
   → BoomBoom tok r
-buildRecord (BoomBoomPrsAFn (BoomBoomD b)) = BoomBoom $ BoomBoomD
+buildRecord (RecordBuilder (BoomBoomD b)) = BoomBoom $ BoomBoomD
   { prs: \tok → do
       {a: r2r, tok: tok'} ← b.prs tok
       pure {a: r2r {}, tok: tok'}
@@ -192,3 +203,13 @@ serialize (BoomBoom (BoomBoomD { ser })) = ser
 
 parse ∷ ∀ a tok. BoomBoom tok a → (tok → Maybe a)
 parse (BoomBoom (BoomBoomD { prs })) = (_.a <$> _) <$> prs
+
+-- | Currently only single helper so... it is still here ;-)
+-- | `Newtype` `wrap/unwrap`
+xrap
+  ∷ ∀ a n tok
+  . Newtype n a
+  ⇒ BoomBoom tok a
+  → BoomBoom tok n
+xrap b = BoomBoom $ wrap <$> unwrap >- b
+
