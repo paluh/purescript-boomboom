@@ -204,7 +204,6 @@ serialize (BoomBoom (BoomBoomD { ser })) = ser
 parse ∷ ∀ a tok. BoomBoom tok a → (tok → Maybe a)
 parse (BoomBoom (BoomBoomD { prs })) = (_.a <$> _) <$> prs
 
--- | Currently only single helper so... it is still here ;-)
 -- | `Newtype` `wrap/unwrap`
 xrap
   ∷ ∀ a n tok

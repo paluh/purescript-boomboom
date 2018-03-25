@@ -4,11 +4,84 @@ because you can boom in both directions!
 
 ## Description
 
-It is still just an experiment - for production ready solutions please check:
-* [purescript-routing-bob](https://github.com/paluh/purescript-routing-bob)
-* [purescript-boomerang](https://github.com/paluh/purescript-boomerang)
+Bidirectional routing library with principled plumbing which provides easy to use generic sugar for variants and records.
 
-I'm trying to implement bidirectional routing with "nearly" applicative interface here (inspired by this [sfvisser answer](https://www.reddit.com/r/haskell/comments/38o0f7/a_mixture_of_applicative_and_divisible/#thing_t1_crwh6le)). What I mean by "nearly" is this:
+Pre α stage... docs too.
+
+## `BoomBoom`
+
+The core type of this library is `BoomBoom.Prim.BoomBoom` which translates really to this simple record:
+
+```purescript
+newtype BoomBoom tok a = BoomBoom { prs: tok → Maybe a, ser: a → ser }
+```
+
+So our `BoomBoom tok a` is a simple parser from `tok` to `a` and also a total serializer function in oposite direction.
+
+## Usage
+
+### Generic helpers
+
+These are tests fragments (`test/BoomBoom/Generic.purs`) for basic session which use generic helpers:
+
+* `tok` in this case is an `Array String`
+
+* `int` is `BoomBoom (Array String) Int`
+
+* `record` is a helper which builds `BoomBoom` for a give record of `BoomBooms`
+
+* `R` is a record wrapper which provides `Eq` ;-)
+
+Record `BoomBoom` generation and usage:
+
+```purescript
+let
+  recordB = BoomBoom.Generic.record { x: int, y: int, z: int }
+Test.Unit.suite "simple record boomboom" $ do
+
+  test "serializes correctly" $ do
+    equal ["1", "2", "3"] (serialize recordB { x: 1, y: 2, z: 3 })
+
+  test "parses correctly" $ do
+    equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB ["1", "2", "3"])
+```
+
+Variant `BoomBoom` generation and usage:
+
+```purescript
+let
+  variantB = variant
+    { zero: BoomBoom $ pure unit
+    , one: int
+    -- | Here we are wrapping our record in `R`
+    -- | it is only required because we want
+    -- | to perform `eq`...
+    , two: BoomBoom $ R <$> unwrap >- recordB
+    }
+Test.Unit.suite "simple variant boomboom" $ do
+  let
+    wrong = ["wrong", "8"]
+    zi = ["zero"]
+    oi = ["one", "1"]
+    ti = ["two", "2", "3", "4"]
+    zv = inj (SProxy ∷ SProxy "zero") unit
+    ov = inj (SProxy ∷ SProxy "one") 1
+    tv = inj (SProxy ∷ SProxy "two") (R {x: 2, y: 3, z: 4})
+  test "serializes correctly" $ do
+    equal zi (serialize variantB zv)
+    equal oi (serialize variantB ov)
+    equal ti (serialize variantB tv)
+  test "parses correctly" $ do
+    equal Nothing (parse variantB wrong)
+    equal (Just zv) (parse variantB zi)
+    equal (Just ov) (parse variantB oi)
+    equal (Just tv) (parse variantB ti)
+```
+
+### `Applicative` API
+
+And here is completely different approach which uses `apply` and `BoomBoom.Prim.diverge` (aka `(>-)`):
+
 
 ```purescript
 path :: BoomBoom String { x :: Int, y :: Int }
@@ -29,44 +102,6 @@ Output:
 
 ```shell
 {"value0":{"x":8080,"y":200}}
-(Just 300test800)
-```
-
-I know that serialization result wrapped in `Maybe` can be a bit tedious, but it is required (I've not found any other solution) to implement `Alt`. I hope that generic interface (which I want to provide) will come to the rescue... Or I can drop `Alt` instance and try to provide some helpers like `onB`, `caseB` etc.
-
-Session with `Alt` and `variant` helper:
-
-```purescript
-record = BoomBoom $
-  {x: _, y: _}
-  <$> _.x >- int
-  <* lit "/"
-  <*> _.y >- int
-
-three' = BoomBoom $
-  variant (SProxy ∷ SProxy "one") int
-  <|> variant (SProxy ∷ SProxy "two") record
-  <|> variant (SProxy ∷ SProxy "zero") (BoomBoom $ pure unit)
-
-
-main = do
-  logShow (serialize three' (inj (SProxy ∷ SProxy "two") {x: 8, y: 9}))
-  logShow (serialize three' (inj (SProxy ∷ SProxy "zero") unit))
-  logShow (serialize three' (inj (SProxy ∷ SProxy "one") 8))
-
-  traceAnyA (parse three' "zero")
-  traceAnyA (parse three' "one8")
-  traceAnyA (parse three' "two8/9")
-```
-
-Output:
-
-```shell
-(Just "two8/9")
-(Just "zero")
-(Just "one8")
-Just { value0: { type: 'zero', value: {} } }
-Just { value0: { type: 'one', value: 8 } }
-Just { value0: { type: 'two', value: { x: 8, y: 9 } } }
+300test800
 ```
 
