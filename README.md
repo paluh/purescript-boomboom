@@ -1,12 +1,12 @@
 # purescript-boomboom
 
-because you can boom in both directions!
+Never hard code your urls again - you can boom in both directions now!
 
 ## Description
 
-Bidirectional routing library with principled plumbing which provides easy to use generic sugar for variants and records.
+Bidirectional routing library with principled plumbing which provides an easy to use generic sugar for variants and records.
 
-Pre α stage... docs too.
+Still β stage... and docs in pre-α ;-)
 
 ## `BoomBoom`
 
@@ -135,3 +135,11 @@ I'm still working on convinient API for serialization because:
 
 is not a nice API :-)
 
+
+## Credits
+
+* A lot of inspirations and crucial suggestions I received from @MonoidMusician. Thanks!
+
+* Initial design of diverging instances was inspired by this @sebastiaanvisser [answer](https://www.reddit.com/r/haskell/comments/38o0f7/a_mixture_of_applicative_and_divisible/#thing_t1_crwh6le)
+
+* Name loosely inspired by this @notcome [gist](https://gist.github.com/notcome/c9d4c750985230d7e346)
