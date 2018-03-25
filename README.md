@@ -46,7 +46,7 @@ Test.Unit.suite "simple record boomboom" $ do
     equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB ["1", "2", "3"])
 ```
 
-Variant `BoomBoom` generation and usage:
+Variant `BoomBoom` generation and usage (with `variant` helper):
 
 ```purescript
 let
@@ -78,6 +78,26 @@ Test.Unit.suite "simple variant boomboom" $ do
     equal (Just tv) (parse variantB ti)
 ```
 
+Of course you can compose and mix these `BoomBooms` and build arbitrarly large routers/serializers:
+
+```purescript
+let
+  nestedB = variant
+    { p1: variant
+        -- | Here again our R which is here just for `eq`
+        { sp1: ((xrap $ record { x: int, y: int, z: int }) ∷ BoomBoom _ R)
+        , sp2: int
+        }
+    , p2: int
+    }
+  i = ["p1", "sp1", "1", "2", "3"]
+  iv = inj (SProxy ∷ SProxy "p1") (inj (SProxy ∷ SProxy "sp1") (R {x: 1, y: 2, z: 3}))
+test "serializes correctly" $ do
+  equal i (serialize nestedB iv)
+test "parses correctly" $ do
+  equal (Just iv) (parse nestedB i)
+```
+
 ### `Applicative` API
 
 And here is completely different approach which uses `apply` and `BoomBoom.Prim.diverge` (aka `(>-)`):
@@ -104,4 +124,14 @@ Output:
 {"value0":{"x":8080,"y":200}}
 300test800
 ```
+
+### TODO
+
+I'm still working on convinient API for serialization because:
+
+```purescript
+  serialize $ inj (SProxy ∷ SProxy "p1") (inj (SProxy ∷ SProxy "sp1") (R {x: 1, y: 2, z: 3}))
+```
+
+is not a nice API :-)
 
