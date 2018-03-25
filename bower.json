@@ -1,5 +1,10 @@
 {
   "name": "purescript-boomboom",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paluh/purescript-boomboom.git"
+  }
+  "license": "BSD-3-Clause",
   "ignore": [
     "**/.*",
     "node_modules",
