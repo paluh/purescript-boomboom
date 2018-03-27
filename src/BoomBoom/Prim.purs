@@ -32,16 +32,19 @@ derive instance functorBoomBoomD ∷ Functor (BoomBoomD tok a')
 -- | instance form quite nice API to create by hand
 -- | `BoomBooms` for records (or other product types):
 -- |
+-- | ```purescript
 -- | recordB ∷ BoomBoom String {x :: Int, y :: Int}
 -- | recordB = BoomBoom $
 -- |   {x: _, y: _}
 -- |   <$> _.x >- int
 -- |   <* lit "/"
 -- |   <*> _.y >- int
+-- | ```
 -- |
--- | It can be tedious and leaves responsibility to accordingly
--- | pick and create elements of a product. For example I could
--- | easily replace `_.x` with `_.y` (and get two `_.y`) by mistake
+-- | This can be tedious and leaves responsibility on the user
+-- | to accordingly pick and create elements of a product.
+-- | For example I could easily replace `_.x` with `_.y` (and get two `_.y`)
+-- | by mistake
 -- | and it won't be detected by compiler.
 -- |
 -- | There is helper defined down below which handles record
@@ -118,11 +121,13 @@ instance semigroupoidVariantBuilder ∷ (Semigroup tok) ⇒ Semigroupoid (Varian
 -- | Our category allows us to step by step
 -- | contract our variant:
 -- |
+-- | ```purescript
 -- |     (((Either a tok → Either b tok) → tok) → tok)
 -- | >>> (((Either b tok → Either c tok) → tok) → tok)
 -- | =   (((Either a tok → Either c tok) → tok) → tok)
+-- | ```
 -- |
--- | Where `a, b, c` is our contracting variant
+-- | Where `a`, `b`, `c` is our contracting variant
 -- | series.
 -- |
 addChoice
@@ -147,8 +152,8 @@ addChoice p prefix (BoomBoom (BoomBoomD b)) = VariantBuilder $ choice
   (BoomBoom (BoomBoomD prefix')) = prefix
   choice = BoomBoomD
     { prs: \t → do
-        {a, tok } ← prefix'.prs t
-        {a: a', tok: tok'} ← b.prs tok
+        { a, tok } ← prefix'.prs t
+        { a: a', tok: tok'} ← b.prs tok
         pure { a: inj p a', tok: tok' }
     , ser: \a2eb2tok → a2eb2tok (case _ of
         Left v → on p (Right <<< (const (prefix'.ser unit) <> b.ser)) Left v
@@ -156,9 +161,10 @@ addChoice p prefix (BoomBoom (BoomBoomD b)) = VariantBuilder $ choice
     }
 
 -- | We are getting our final serializer here - a function which returns
+-- |
 -- | `Either Void tok` so we can just pick right thing from it:
 -- |
--- | ser ∷ (((Either (Variant r) tok → Either (Variant ()) tok) → tok) → tok)
+-- | `ser ∷ (((Either (Variant r) tok → Either (Variant ()) tok) → tok) → tok)`
 buildVariant
   ∷ ∀ tok r
   . VariantBuilder tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)
