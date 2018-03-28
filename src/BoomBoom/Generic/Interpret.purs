@@ -3,13 +3,13 @@ module BoomBoom.Generic.Interpret where
 import Prelude
 
 import BoomBoom.Prim (BoomBoom(BoomBoom), addChoice, addField, buildRecord, buildVariant) as Prim
-import BoomBoom.Prim (BoomBoom, RecordBuilder, VariantBuilder)
+import BoomBoom.Prim (BoomBoom, RecordBuilder, VariantBuilder, serialize)
 import BoomBoom.String (int)
 import Data.Either (Either)
 import Data.Monoid (class Monoid)
 import Data.Record as Data.Record
 import Data.Record.Builder as Record.Builder
-import Data.Variant (Variant)
+import Data.Variant (Variant, inj)
 import Type.Prelude (class IsSymbol, class RowLacks, class RowToList, RLProxy(..), SProxy(..))
 import Type.Row (Cons, Nil)
 
@@ -207,17 +207,114 @@ b5 = fun (FunProxy ∷ FunProxy "boomboom" Root) (V { y: R {}})
 
 b6 = fun (FunProxy ∷ FunProxy "boomboom" Root) (V { y: R { z: B int, v: B int}})
 
+newtype Continuation r a b = Continuation (a → (b → r) → r)
+
+instance semigroupContinuation ∷ Semigroupoid (Continuation r) where
+  compose (Continuation b2c2r2r) (Continuation a2b2r2r) =
+    Continuation \a c2r -> a2b2r2r a (\b → b2c2r2r b (\c → c2r c))
+
+instance categoryContinuation ∷ Category (Continuation r) where
+  id = Continuation (\a a2r → a2r a)
+
+
 -- instance algVariantsRootR ∷ Alg "variants" Root "R" (RecordBuilder tok r {} r) (BoomBoom tok r) where
 --   alg _ r = Prim.buildRecord r
 
 -- instance algVariantsRootV ∷ Alg "variants" Root "V" (Record.Builder.Builder {} {|r}) {|r} where
 --   alg _ r = Record.Builder.build r {}
 -- 
--- instance algVaiantsRootB ∷ Alg "variants" Root "B" (BoomBoom tok a) (a → a) where
---   alg _ _ = id
+-- instance algVaiantsRootB ∷ Alg "variants" Root "B" (BoomBoom tok a) (Continuation r a a) where
+--    alg _ _ = id
+-- 
+-- instance algVaiantsFieldB
+--   ∷ ( RowCons fieldName a v' v
+--     , RowLacks fieldName v'
+--     , IsSymbol fieldName
+--     )
+--   ⇒ Alg "variants" (Field "V" fieldName) "B" (BoomBoom r a a) (Continuation r a (Variant v))
+--   where
+--     alg _ _ = Continuation (\a v2r → v2r (inj (SProxy ∷ SProxy fieldName) a))
+
+-- instance algVariantsVV
+--   ∷ ( RowCons fieldName a v v'
+--     , RowLacks fieldName v
+--     , IsSymbol fieldName
+--     , RowCons fieldName {|r} n n'
+--     , RowLacks fieldName n
+--     )
+--   ⇒ Alg
+--     "variants"
+--     (Field "V" fieldName)
+--     "V"
+--     (BuildCat (a → result) Record.Builder.Builder {} {|r})
+--     (BuildCat (Variant v' → result) Record.Builder.Builder {|n} {|n'})
+--   where
+--     alg _ (BuildCat v2rb) = BuildCat (\v2r → Record.Builder.insert _fieldName (Record.Builder.build (v2rb (v2r <<< inj _fieldName)) {}))
+--       where
+--         _fieldName = SProxy ∷ SProxy fieldName
+
+newtype BuildCat v f a b = BuildCat (v -> f a b)
+
+instance semigroupoidCat ∷ (Semigroupoid f) ⇒ Semigroupoid (BuildCat v f) where
+  compose (BuildCat v2fbc) (BuildCat v2fab) = BuildCat (\v → v2fab v >>> v2fbc v)
 
 
+instance algVariantsVB
+  ∷ ( RowCons fieldName a v v'
+    , RowLacks fieldName v
+    , IsSymbol fieldName
+    , RowCons fieldName (a → result) r r'
+    , RowLacks fieldName r
+    )
+  ⇒ Alg
+    "variants"
+    (Field "V" fieldName)
+    "B"
+    (BoomBoom tok a)
+    (BuildCat (Variant v' → result) Record.Builder.Builder {|r} {|r'})
+  where
+    alg _ _ = BuildCat (\v2r → Record.Builder.insert _fieldName (v2r <<< inj _fieldName))
+      where
+        _fieldName = SProxy ∷ SProxy fieldName
 
+instance algVariantsRootV
+  ∷ Alg
+    "variants"
+    Root
+    "V"
+    (BuildCat (a → a) Record.Builder.Builder {} {|r})
+    {|r}
+  where
+    alg _ (BuildCat v2rb) = Record.Builder.build (v2rb id) {}
+
+routes = V {b : B int} -- , c : B int}
+
+-- v1 ∷ { b ∷ Int → Variant (b ∷ Int, c ∷ Int), c ∷ Int → Variant (b ∷ Int, c ∷ Int) }
+-- v1 ∷ { b ∷ { c ∷ Int → Variant (b ∷ Variant (c ∷ Int)) }}
+b :: BoomBoom (Array String)
+   (Variant
+      ( b :: Int
+      )
+   )
+b = fun (FunProxy ∷ FunProxy "boomboom" Root) routes
+
+v1 ∷ { b ∷ Int → Variant (b ∷ Int) }
+v1 = fun (FunProxy ∷ FunProxy "variants" Root) routes
+
+-- 
+x :: Array String
+x = (serialize b (v1.b 8))
+
+-- src/BoomBoom/Generic/Interpret.purs|290 col 6 error| 290:73: 
+-- Could not match type
+-- ( b :: Int -> Variant ( b :: Int , c :: Int | t5 ) , c :: Int -> Variant ( b :: Int , c :: Int | t5 ) )
+-- ( b :: Int -> Variant ( b :: Int , c :: Int ) )
+
+-- v2 ∷ { y ∷ { z ∷ Int → Variant (y ∷ (Variant (z :: Int, x ∷ Int))) } }
+-- v2 = fun (FunProxy ∷ FunProxy "variants" Root) (V { y: V { z: B int, x: B int }})
+
+
+-- newtype BuildCat v f a b = BuildCat (v -> f a b)
 
 -- -- -- data MonoidC d a b = MonoidC d
 -- -- -- 
