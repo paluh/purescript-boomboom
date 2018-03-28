@@ -235,23 +235,23 @@ instance categoryContinuation ∷ Category (Continuation r) where
 --   where
 --     alg _ _ = Continuation (\a v2r → v2r (inj (SProxy ∷ SProxy fieldName) a))
 
--- instance algVariantsVV
---   ∷ ( RowCons fieldName a v v'
---     , RowLacks fieldName v
---     , IsSymbol fieldName
---     , RowCons fieldName {|r} n n'
---     , RowLacks fieldName n
---     )
---   ⇒ Alg
---     "variants"
---     (Field "V" fieldName)
---     "V"
---     (BuildCat (a → result) Record.Builder.Builder {} {|r})
---     (BuildCat (Variant v' → result) Record.Builder.Builder {|n} {|n'})
---   where
---     alg _ (BuildCat v2rb) = BuildCat (\v2r → Record.Builder.insert _fieldName (Record.Builder.build (v2rb (v2r <<< inj _fieldName)) {}))
---       where
---         _fieldName = SProxy ∷ SProxy fieldName
+instance algVariantsVV
+  ∷ ( RowCons fieldName a v v'
+    , RowLacks fieldName v
+    , IsSymbol fieldName
+    , RowCons fieldName {|r} n n'
+    , RowLacks fieldName n
+    )
+  ⇒ Alg
+    "variants"
+    (Field "V" fieldName)
+    "V"
+    (BuildCat (a → result) Record.Builder.Builder {} {|r})
+    (BuildCat (Variant v' → result) Record.Builder.Builder {|n} {|n'})
+  where
+    alg _ (BuildCat v2rb) = BuildCat (\v2r → Record.Builder.insert _fieldName (Record.Builder.build (v2rb (v2r <<< inj _fieldName)) {}))
+      where
+        _fieldName = SProxy ∷ SProxy fieldName
 
 newtype BuildCat v f a b = BuildCat (v -> f a b)
 
@@ -260,9 +260,22 @@ instance semigroupoidCat ∷ (Semigroupoid f) ⇒ Semigroupoid (BuildCat v f) wh
 
 class R2V (rl ∷ RowList) (v ∷ # Type) | rl → v
 
-instance r2vNil ∷ R2V Nil () where
-instance r2vCons ∷ (RowCons name a r' r, R2V tail r') ⇒ R2V (Cons name (a → x) tail) r where
+routes = V {c : V { d: B int, e: B int }}
 
+-- v1 ∷ { c ∷ { d ∷ Int → Variant (c ∷ Variant (d ∷ Int)) }}
+v1 = fun (FunProxy ∷ FunProxy "variants" Root) routes
+
+b = fun (FunProxy ∷ FunProxy "boomboom" Root) routes
+
+instance a_r2vNil ∷ R2V Nil () where
+instance b_r2vCons ∷ (RowToList r rl, R2V rl v', R2V tail t', RowCons name (Variant v') t' v) ⇒ R2V (Cons name (Record r) tail) v where
+instance c_r2vCons ∷ (RowCons name a v' v, R2V tail v') ⇒ R2V (Cons name (a → x) tail) v where
+
+
+
+-- routes = V {c : V { d: B int }}
+
+-- BoomBoom.Generic.Interpret.R2V (Cons "c" { d :: Int -> Variant ( c :: Variant ( d :: Int | t4 ) | t5 ) } Nil ) ( c :: Variant ( d :: Int | t4 ) | t5 )
 
 instance algVariantsVB
   ∷ ( RowCons fieldName a v v'
@@ -284,7 +297,6 @@ instance algVariantsVB
 
 instance algVariantsRootV
   ∷ ( RowToList r rl
-    , RowToList v vl
     , R2V rl v
     )
   ⇒ Alg
@@ -296,15 +308,11 @@ instance algVariantsRootV
   where
     alg _ (BuildCat v2rb) = Record.Builder.build (v2rb id) {}
 
-routes = V {b : B int} -- , c : B int}
+
 -- 
 -- -- v1 ∷ { b ∷ Int → Variant (b ∷ Int, c ∷ Int), c ∷ Int → Variant (b ∷ Int, c ∷ Int) }
 -- -- v1 ∷ { b ∷ { c ∷ Int → Variant (b ∷ Variant (c ∷ Int)) }}
-b = fun (FunProxy ∷ FunProxy "boomboom" Root) routes
 -- 
--- -- v1 ∷ { b ∷ Int → Variant (b ∷ Int) }
-v1 = fun (FunProxy ∷ FunProxy "variants" Root) routes
-
 -- 
 -- x :: Array String
 -- x = (serialize b (v1.b 8))
