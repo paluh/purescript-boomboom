@@ -88,9 +88,11 @@ suite = do
         builder = genBuilder r
         boomboom = genBoomboom r
       test "serializes correctly" $ do
-        -- | Record turns into function which takes an input record
+        -- | Records are turned into functions. They take an input record
         -- | but in places where are variants expected it should have
         -- | functions which accepts these variants builders.
+        -- | If you don't have any variant in your record this function
+        -- | is just `id`.
         equal ["x", "8"] (serialize boomboom (builder {a: \b → b.x 8}))
         equal ["y", "8", "9"] (serialize boomboom (builder {a: \b → b.y { s: 8, t: 9}}))
 
