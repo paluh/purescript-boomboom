@@ -2,18 +2,17 @@ module BoomBoom.Generic.Interpret where
 
 import Prelude
 
-import BoomBoom.Prim (BoomBoom(BoomBoom), addChoice, addField, buildRecord, buildVariant) as Prim
-import BoomBoom.Prim (BoomBoom, RecordBuilder, VariantBuilder, serialize)
-import BoomBoom.String (int)
+import BoomBoom.Prim (addChoice, addField, buildRecord, buildVariant) as Prim
+import BoomBoom.Prim (BoomBoom, RecordBuilder, VariantBuilder)
+import BoomBoom.String (_lit)
 import Data.Either (Either)
 import Data.Monoid (class Monoid)
 import Data.Record (get)
 import Data.Record as Data.Record
 import Data.Record.Builder as Record.Builder
 import Data.Variant (Variant, inj)
-import Type.Prelude (class IsSymbol, class RowLacks, class RowToList, Proxy(..), RLProxy(..), SProxy(..))
+import Type.Prelude (class IsSymbol, class ListToRow, class RowLacks, class RowToList, RLProxy(RLProxy), SProxy(SProxy))
 import Type.Row (Cons, Nil, kind RowList)
-import Unsafe.Coerce (unsafeCoerce)
 
 data R r = R (Record r)
 data V r = V (Record r)
@@ -98,6 +97,9 @@ data AlgProxy (interpreter ∷ Symbol) (field ∷ Field) (constructor ∷ Symbol
 class Alg interpreter field constructor a b | interpreter field constructor → a, interpreter field constructor a → b where
   alg ∷ AlgProxy interpreter field constructor → a → b
 
+-- | "unwrap" interpreter which just
+-- | drops "R", "V" and "B" construtors
+
 instance algUnwrapRootR ∷ Alg "unwrap" Root "R" (Record.Builder.Builder {} {|r}) {|r} where
   alg _ r = Record.Builder.build r {}
 
@@ -134,15 +136,6 @@ instance algUnwrapFieldB
   where
   alg _ a = Record.Builder.insert (SProxy ∷ SProxy fieldName) a
 
-u' = fun (FunProxy ∷ FunProxy "unwrap" Root) (B int)
-
-u'' = fun (FunProxy ∷ FunProxy "unwrap" Root) (R { })
-
-u''' = fun (FunProxy ∷ FunProxy "unwrap" Root) (R { x: B int })
-
-u'''' = fun (FunProxy ∷ FunProxy "unwrap" Root) (R { x: B 8, y: B 8, z: V { a: B 9 }})
-
-
 instance algBoomBoomRootR ∷ Alg "boomboom" Root "R" (RecordBuilder tok r {} r) (BoomBoom tok r) where
   alg _ r = Prim.buildRecord r
 
@@ -173,10 +166,17 @@ instance addFieldVariant
     , IsSymbol name
     , Monoid tok
     , Eq tok
+    , Prefix tok
     )
   ⇒ AddField "V" name (BoomBoom tok a) (VariantBuilder tok (Variant s) (Either (Variant r) tok) (Either (Variant r') tok))
   where
-  addField _ _ b = Prim.addChoice (SProxy ∷ SProxy name) (Prim.BoomBoom (pure unit)) b
+  addField _ _ b = Prim.addChoice (SProxy ∷ SProxy name) (prefix (SProxy ∷ SProxy name)) b
+
+class Prefix tok where
+  prefix ∷ ∀ name. (IsSymbol name) ⇒ SProxy name → BoomBoom tok Unit
+
+instance prefixString ∷ Prefix (Array String) where
+  prefix = _lit
 
 instance algBoomBoomFieldR
   ∷ (AddField parent fieldName (BoomBoom tok {|r}) b)
@@ -196,74 +196,99 @@ instance algBoomBoomFieldB
   where
     alg _ a = addField (SProxy ∷ SProxy parent) (SProxy ∷ SProxy fieldName) a
 
+newtype ApplicativeCat appl cat a b = ApplicativeCat (appl (cat a b))
 
-b1 = fun (FunProxy ∷ FunProxy "boomboom" Root) (B int)
+instance semigroupoidApplicativeCat ∷ (Apply appl, Semigroupoid cat) ⇒ Semigroupoid (ApplicativeCat appl cat) where
+  compose (ApplicativeCat ac1) (ApplicativeCat ac2) = ApplicativeCat $ (<<<) <$> ac1 <*> ac2 
 
-b2 = fun (FunProxy ∷ FunProxy "boomboom" Root) (R { })
+type ReaderCat v cat a b = ApplicativeCat ((→) v) cat a b
 
-b3 = fun (FunProxy ∷ FunProxy "boomboom" Root) (R { x: R {} })
 
-b4 = fun (FunProxy ∷ FunProxy "boomboom" Root) (V { x: B int })
+instance algVariantsRootR
+  ∷ ( RowToList output ol
+    , RecordToBuilder ol builder
+    )
+  ⇒ Alg "variants" Root "R" (ApplicativeCat ((→) {|builder}) Record.Builder.Builder {} {|output}) ({|builder} → {|output})
+  where
+    alg _ (ApplicativeCat r2rb) = \r → (Record.Builder.build (r2rb r) {})
 
-b5 = fun (FunProxy ∷ FunProxy "boomboom" Root) (V { y: R {}})
 
-b6 = fun (FunProxy ∷ FunProxy "boomboom" Root) (V { y: R { z: B int, v: B int}})
-
--- instance algVariantsRootR ∷ Alg "variants" Root "R" (RecordBuilder tok r {} r) (BoomBoom tok r) where
---   alg _ r = Prim.buildRecord r
-
--- instance algVariantsRootV ∷ Alg "variants" Root "V" (Record.Builder.Builder {} {|r}) {|r} where
---   alg _ r = Record.Builder.build r {}
--- 
--- instance algVaiantsRootB ∷ Alg "variants" Root "B" (BoomBoom tok a) (Continuation r a a) where
---    alg _ _ = id
--- 
--- instance algVaiantsFieldB
---   ∷ ( RowCons fieldName a v' v
---     , RowLacks fieldName v'
---     , IsSymbol fieldName
---     )
---   ⇒ Alg "variants" (Field "V" fieldName) "B" (BoomBoom r a a) (Continuation r a (Variant v))
---   where
---     alg _ _ = Continuation (\a v2r → v2r (inj (SProxy ∷ SProxy fieldName) a))
-
-data RProxy (rl ∷ RowList) (r ∷ # Type) = RProxy
-
-class R2V (rl ∷ RowList) (v ∷ # Type) | rl → v where
-  r2v ∷ RProxy rl v
-instance a_r2vNil ∷ R2V Nil () where
-  r2v = RProxy
-instance b_r2vCons ∷ (RowToList r rl, R2V rl v', R2V tail t, RowCons name (Variant v') t v) ⇒ R2V (Cons name (Record r) tail) v where
-  r2v = RProxy
-instance c_r2vCons ∷ (RowCons name a v' v, R2V tail v') ⇒ R2V (Cons name (a → x) tail) v where
-  r2v = RProxy
-
-newtype BuildCat v f a b = BuildCat (v -> f a b)
-
-instance semigroupoidCat ∷ (Semigroupoid f) ⇒ Semigroupoid (BuildCat v f) where
-  compose (BuildCat v2fbc) (BuildCat v2fab) = BuildCat (\v → v2fab v >>> v2fbc v)
-
-instance algVariantsVR
-  ∷ ( RowCons fieldName ({|r} → result) o o'
-    , RowLacks fieldName o
-    , IsSymbol fieldName
-    , RowCons fieldName {|r'} v v'
-    , RowLacks fieldName v
-    -- , RowToList r' rl
-    -- , R2V rl v
+instance algVariantsRootV
+  ∷ ( RowToList builder bl
+    , BuilderToVariant bl input
     )
   ⇒ Alg
     "variants"
-    (Field "V" fieldName)
-    "R"
-    (BuildCat {|r} Record.Builder.Builder {} {|r'})
-    (BuildCat (Variant v' → result) Record.Builder.Builder {|o} {|o'})
+    Root
+    "V"
+    (ApplicativeCat ((→) (Variant input → Variant input)) Record.Builder.Builder {} {|builder})
+    {|builder}
   where
-    alg _ (BuildCat i2rb) =
-      BuildCat (\v2r → Record.Builder.insert _fieldName (\r → v2r (inj _fieldName $ toSubrecord r)))
+    alg _ (ApplicativeCat v2rb) = Record.Builder.build (v2rb id) {}
+
+instance algVariantsRB
+  ∷ ( RowCons fieldName a i i'
+    , RowLacks fieldName i
+    , IsSymbol fieldName
+    , RowCons fieldName a o o'
+    , RowLacks fieldName o
+    )
+  ⇒ Alg
+    "variants"
+    (Field "R" fieldName)
+    "B"
+    (BoomBoom tok a)
+    (ApplicativeCat ((→) {|i'}) Record.Builder.Builder {|o} {|o'})
+  where
+    alg _ _ = ApplicativeCat (\i → Record.Builder.insert _fieldName (get _fieldName i))
+      where
+        _fieldName = SProxy ∷ SProxy fieldName
+
+instance algVariantsRR
+  ∷ ( RowCons fieldName {|subbuilder} builder builder'
+    , RowLacks fieldName builder
+    , IsSymbol fieldName
+    , RowCons fieldName {|suboutput} output output'
+    , RowLacks fieldName output
+    )
+  ⇒ Alg
+    "variants"
+    (Field "R" fieldName)
+    "R"
+    (ApplicativeCat ((→) {|subbuilder}) Record.Builder.Builder {} {|suboutput})
+    (ApplicativeCat ((→) {|builder'}) Record.Builder.Builder {|output} {|output'})
+  where
+    alg _ (ApplicativeCat i2rb) =
+      ApplicativeCat (\i → Record.Builder.insert _fieldName (toSubrecord (get _fieldName i)))
       where
         _fieldName = SProxy ∷ SProxy fieldName
         toSubrecord i = Record.Builder.build (i2rb i) {}
+
+instance algVariantsRV
+  ∷ ( RowCons fieldName ({|builder} → Variant v) i i'
+    , RowLacks fieldName i
+    , IsSymbol fieldName
+    , RowCons fieldName (Variant v) o o'
+    , RowLacks fieldName o
+    , RowToList builder bl
+    , BuilderToVariant bl v
+    )
+  ⇒ Alg
+    "variants"
+    (Field "R" fieldName)
+    "V"
+    (ApplicativeCat ((→) (Variant v → Variant v)) Record.Builder.Builder {} {|builder})
+    (ApplicativeCat ((→) {|i'}) Record.Builder.Builder {|o} {|o'})
+  where
+    alg _ (ApplicativeCat v2rb) = ApplicativeCat useSubvariants
+      where
+        _fieldName = SProxy ∷ SProxy fieldName
+        useSubvariants i =
+          let
+            onSubvariants = get _fieldName i
+            toSubvariants = (Record.Builder.build (v2rb id) {})
+          in
+            Record.Builder.insert _fieldName (onSubvariants toSubvariants)
 
 instance algVariantsVB
   ∷ ( RowCons fieldName a v v'
@@ -277,52 +302,33 @@ instance algVariantsVB
     (Field "V" fieldName)
     "B"
     (BoomBoom tok a)
-    (BuildCat (Variant v' → result) Record.Builder.Builder {|r} {|r'})
+    (ApplicativeCat ((→) (Variant v' → result)) Record.Builder.Builder {|r} {|r'})
   where
-    alg _ _ = BuildCat (\v2r → Record.Builder.insert _fieldName (v2r <<< inj _fieldName))
+    alg _ _ = ApplicativeCat (\v2r → Record.Builder.insert _fieldName (v2r <<< inj _fieldName))
       where
         _fieldName = SProxy ∷ SProxy fieldName
 
-instance algVariantsRootV
-  ∷ ( RowToList r rl
-    , R2V rl v
+instance algVariantsVR
+  ∷ ( RowCons fieldName ({|builder} → result) o o'
+    , RowLacks fieldName o
+    , IsSymbol fieldName
+    , RowCons fieldName {|output} v v'
+    , RowLacks fieldName v
+    , RowToList output ol
+    , RecordToBuilder ol builder
     )
   ⇒ Alg
     "variants"
-    Root
-    "V"
-    (BuildCat (Variant v → Variant v) Record.Builder.Builder {} {|r})
-    {|r}
+    (Field "V" fieldName)
+    "R"
+    (ApplicativeCat ((→) {|builder}) Record.Builder.Builder {} {|output})
+    (ApplicativeCat ((→) (Variant v' → result)) Record.Builder.Builder {|o} {|o'})
   where
-    alg _ (BuildCat v2rb) = Record.Builder.build (v2rb id) {}
-
--- r3 = R { c : V { x : B int }}
--- v3 ∷ { c :: { x :: Int -> Variant ( x :: Int ) } -> Variant ( x :: Int )} -> { c :: Variant ( x :: Int ) }
--- v3 = fun (FunProxy ∷ FunProxy "variants" Root) r3
-
-r5 = R { y : B int }
-v5 = fun (FunProxy ∷ FunProxy "variants" Root) r5
-
-class R2R (rl ∷ RowList) (v ∷ # Type) | rl → v where
-  r2r ∷ RProxy rl v
-
-instance a_r2rNil ∷ R2R Nil () where
-  r2r = RProxy
-instance b_r2rCons ∷ (RowToList r rl, R2R rl r', R2R tail t, RowCons name ({|r'} → Variant r) t v) ⇒ R2R (Cons name (Variant r) tail) v where
-  r2r = RProxy
-instance c_r2rCons ∷ (RowToList r rl, R2R rl r', R2R tail t, RowCons name (Record r' → Record r) t v) ⇒ R2R (Cons name (Record r) tail) v where
-  r2r = RProxy
-instance d_r2rCons ∷ (RowCons name a t v, R2R tail t) ⇒ R2R (Cons name a tail) v where
-  r2r = RProxy
-
-
-instance algVariantsRootR
-  ∷ ( R2R rl r
-    , RowToList r' rl
-    )
-  ⇒ Alg "variants" Root "R" (BuildCat {|r} Record.Builder.Builder {} {|r'}) ({|r} → {|r'})
-  where
-    alg _ (BuildCat r2rb) = \r → (Record.Builder.build (r2rb r) {})
+    alg _ (ApplicativeCat i2rb) =
+      ApplicativeCat (\v2r → Record.Builder.insert _fieldName (\r → v2r (inj _fieldName $ toSubrecord r)))
+      where
+        _fieldName = SProxy ∷ SProxy fieldName
+        toSubrecord i = Record.Builder.build (i2rb i) {}
 
 instance algVariantsVV
   ∷ ( RowCons fieldName a v v'
@@ -335,86 +341,149 @@ instance algVariantsVV
     "variants"
     (Field "V" fieldName)
     "V"
-    (BuildCat (a → result) Record.Builder.Builder {} {|r})
-    (BuildCat (Variant v' → result) Record.Builder.Builder {|n} {|n'})
+    (ApplicativeCat ((→) (a → result)) Record.Builder.Builder {} {|r})
+    (ApplicativeCat ((→) (Variant v' → result)) Record.Builder.Builder {|n} {|n'})
   where
-    alg _ (BuildCat v2rb) = BuildCat (\v2r → Record.Builder.insert _fieldName (Record.Builder.build (v2rb (v2r <<< inj _fieldName)) {}))
+    alg _ (ApplicativeCat v2rb) = ApplicativeCat (\v2r → Record.Builder.insert _fieldName (Record.Builder.build (v2rb (v2r <<< inj _fieldName)) {}))
       where
         _fieldName = SProxy ∷ SProxy fieldName
 
-instance algVariantsRV
-  ∷ ( RowCons fieldName ({|r} → Variant v) i i'
-    , RowLacks fieldName i
-    , IsSymbol fieldName
-    , RowCons fieldName (Variant v) o o'
-    , RowLacks fieldName o
-    -- , RowToList r rl
-    -- , R2R rl v
+
+-- | All this __shit__ below is written to allow full
+-- | inference of final types of builders.
+-- | So please.. ignore this stuff...
+
+class VariantToBuilder (variant ∷ RowList) (builder ∷ # Type) | variant → builder, builder → variant
+
+instance v2b
+  ∷ ( ListToRow variantL variant
+    , VariantToBuilderGo variantL (Variant variant) builder
     )
-  ⇒ Alg
-    "variants"
-    (Field "R" fieldName)
-    "V"
-    (BuildCat (Variant v → Variant v) Record.Builder.Builder {} {|r})
-    (BuildCat {|i'} Record.Builder.Builder {|o} {|o'})
-  where
-    alg _ (BuildCat v2rb) = BuildCat useSubvariants
-      where
-        _fieldName = SProxy ∷ SProxy fieldName
-        useSubvariants i =
-          let
-            onSubvariants = get _fieldName i
-            toSubvariants = (Record.Builder.build (v2rb id) {})
-          in
-            Record.Builder.insert _fieldName (onSubvariants toSubvariants)
+  ⇒ VariantToBuilder variantL builder
 
-instance algVariantsRB
-  ∷ ( RowCons fieldName a i i'
-    , RowLacks fieldName i
-    , IsSymbol fieldName
-    , RowCons fieldName a o o'
-    , RowLacks fieldName o
-    -- , R2R ol r'
-    -- , RowToList o' ol
+class VariantToBuilderGo (variant ∷ RowList) (result ∷ Type) (builder ∷ # Type) | variant result → builder
+
+instance variantToBuilderGoNil ∷ VariantToBuilderGo Nil result ()
+
+-- | Example:
+-- | input: Variant (a ∷ Record ( x ∷ Int ))
+-- | output: Record (a ∷ Record ( x ∷ Int ) → input ))
+instance variantToBuilderGoRecord
+  ∷ ( RowToList r rl
+    , RecordToBuilderGo rl result recordBuilder
+    , VariantToBuilderGo tail result tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name (Record recordBuilder → result) tailL') builder
     )
-  ⇒ Alg
-    "variants"
-    (Field "R" fieldName)
-    "B"
-    (BoomBoom tok a)
-    (BuildCat {|i'} Record.Builder.Builder {|o} {|o'})
-  where
-    alg _ _ = BuildCat (\i → Record.Builder.insert _fieldName (get _fieldName i))
-      where
-        _fieldName = SProxy ∷ SProxy fieldName
+  ⇒ VariantToBuilderGo (Cons name (Record r) tail) result  builder
 
-r2 = R { c : B int }
+-- | Example:
+-- | input: Variant (a ∷ Variant ( x ∷ Int ))
+-- | output: Record (a ∷ Record ( x ∷ Int → input ))
+instance variantToBuilderGoVariant
+  ∷ ( RowToList v vl
+    , VariantToBuilderGo vl result variantBuilder
+    , VariantToBuilderGo tail result tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name (Record variantBuilder) tailL') builder
+    )
+  ⇒ VariantToBuilderGo (Cons name (Variant v) tail) result builder
 
-v2 ∷ { c ∷ Int } → { c ∷ Int }
-v2 = fun (FunProxy ∷ FunProxy "variants" Root) r2
+-- | Example:
+-- | input: Variant (a ∷ Int)
+-- | output: Record (a ∷ Int → input ))
+instance variantToBuilderGoOther
+  ∷ ( VariantToBuilderGo tail result tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name (a → result) tailL') builder
+    )
+  ⇒ VariantToBuilderGo (Cons name a tail) result builder
 
-bb2 :: BoomBoom (Array String) { c :: Int }
-bb2 = fun (FunProxy ∷ FunProxy "boomboom" Root) r2
+class RecordToBuilder (record ∷ RowList) (builder ∷ # Type) | record → builder
 
+instance r2b ∷ (ListToRow variant result, RecordToBuilderGo variant (Record result) builder) ⇒ RecordToBuilder variant builder
 
---r1 = V {c : V { d: B int, e: B int, z: V { x : B int }}}
---
---v1 = fun (FunProxy ∷ FunProxy "variants" Root) r1
---
---bb1 = fun (FunProxy ∷ FunProxy "boomboom" Root) r1
+class RecordToBuilderGo (record ∷ RowList) (result ∷ Type) (builder ∷ # Type) | record result → builder
 
+instance recordToBuilderGoNil ∷ RecordToBuilderGo Nil result ()
 
--- x3 = v3 { c: \b → b.x 8 }
--- 
--- r4 = R { c : V { x : B int, y: B int }}
--- 
--- v4
---   ∷ { c :: { y :: Int -> Variant ( x :: Int , y :: Int ) , x :: Int -> Variant ( x :: Int , y :: Int ) } -> Variant ( x :: Int , y :: Int )}
---   -> { c :: Variant ( x :: Int , y :: Int ) }
--- v4 = fun (FunProxy ∷ FunProxy "variants" Root) r4
--- 
--- x41 = v4 { c: \b → b.y 8 }
--- -- r4 = R { c : R { x : B int }}
--- -- 
--- -- v4 = fun (FunProxy ∷ FunProxy "variants" Root) r4
--- 
+-- | Example:
+-- | input: Record (a ∷ Variant ( x ∷ Int, y ∷ String ))
+-- | output: Record (a ∷ Record ( x ∷ Int → Variant (...), y ∷ String → Variant (..) ) → input)
+instance a_recordToBuilderGoVariant
+  ∷ ( RowToList v vl
+    , VariantToBuilderGo vl (Variant v) variantBuilder
+    , RecordToBuilderGo tail result tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name (Record variantBuilder → (Variant v)) tailL') builder
+    )
+  ⇒ RecordToBuilderGo (Cons name (Variant v) tail) result builder
+
+-- | Example:
+-- | input: Record (a ∷ Record ( x ∷ Int, Variant (y ∷ Int) ))
+-- | output: Record (a ∷ Record ( x ∷ Int, y ∷ (Record (y ∷ Int → Variant (y ∷ Int)))))
+instance b_recordToBuilderGoRecord
+  ∷ ( RowToList r rl
+    , RecordToBuilderGo rl result recordBuilder
+    , RecordToBuilderGo tail result tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name (Record recordBuilder) tailL') builder
+    )
+  ⇒ RecordToBuilderGo (Cons name (Record r) tail) result builder
+
+instance c_recordToBuilderGoOther
+  ∷ ( RecordToBuilderGo tail result tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name a tailL') builder
+    )
+  ⇒ RecordToBuilderGo (Cons name a tail) result builder
+
+class BuilderToRecord (builder ∷ RowList) (record ∷ # Type) | builder → record
+
+instance builderToRecordNil ∷ BuilderToRecord Nil ()
+
+instance g_builderToRecordFunRecord
+  ∷ ( RowToList r rl
+    , BuilderToVariant rl variant
+    , BuilderToRecord tail tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name (Variant variant) tailL') record
+    )
+  ⇒ BuilderToRecord (Cons name ((Record r) → x) tail) record
+
+instance i_builderToRecordOther
+  ∷ ( BuilderToRecord tail tailL'
+    , RowToList tailL' tail'
+    , ListToRow (Cons name a tail') record
+    )
+  ⇒ BuilderToRecord (Cons name a tail) record
+
+class BuilderToVariant (builder ∷ RowList) (variant ∷ # Type) | builder → variant
+
+instance builderToVariantNil ∷ BuilderToVariant Nil ()
+
+instance a_builderToVariantRecord
+  ∷ ( RowToList r rl
+    , BuilderToVariant rl subVariant
+    , BuilderToVariant tail tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name (Variant subVariant) tailL') variant
+    )
+  ⇒ BuilderToVariant (Cons name (Record r) tail) variant
+
+instance b_builderToVariantRecordFun
+  ∷ ( RowToList r rl
+    , BuilderToRecord rl subRecord
+    , BuilderToVariant tail tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name (Record subRecord) tailL') variant
+    )
+  ⇒ BuilderToVariant (Cons name ((Record r) → x) tail) variant
+
+instance c_builderToVariantFun
+  ∷ ( BuilderToVariant tail tail'
+    , RowToList tail' tailL'
+    , ListToRow (Cons name a tailL') variant
+    )
+  ⇒ BuilderToVariant (Cons name (a → x) tail) variant
+
