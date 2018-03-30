@@ -8,14 +8,17 @@ import BoomBoom.Prim (BoomBoom(..), addField, buildRecord, buildVariant, parse, 
 import BoomBoom.String (_lit, addChoice, int, lit, string, variant)
 import BoomBoom.String as BoomBoom.String
 import Data.Array (singleton)
+import Data.Generic.Rep (class Generic)
+import Data.Generic.Rep.Eq (genericEq)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
-import Data.Variant (inj)
+import Data.Record.Extra (class EqRecord, eqRecord)
+import Data.Variant (Variant, inj)
 import Global.Unsafe (unsafeStringify)
 import Test.Unit (suite) as Test.Unit
 import Test.Unit (test)
 import Test.Unit.Assert (equal)
-import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
+import Type.Prelude (class IsSymbol, class RowToList, SProxy(..), reflectSymbol)
 
 -- newtype R = R { x ∷ Int, y ∷ Int, z ∷ Int }
 -- derive instance eqR ∷ Eq R
@@ -53,17 +56,48 @@ import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
 -- -- v4 ∷ { c ∷ { d ∷ Int -> Variant ( d ∷ Int ) } -> Variant ( d ∷ Int ) } -> { c ∷ Variant ( d ∷ Int ) }
 -- v4 = fun (FunProxy ∷ FunProxy "variants" Root) r4
 
+
+newtype Record' (r ∷ # Type) = Record' (Record r)
+derive instance genericRecord' ∷ Generic (Record' r) _
+instance eqRecord' ∷ (RowToList r rl, EqRecord rl r) ⇒ Eq (Record' r) where
+  eq (Record' r1) (Record' r2) = eqRecord r1 r2
+instance showR ∷ Show (Record' r) where
+  show = unsafeStringify
+
+genBuilder = fun (FunProxy ∷ FunProxy "variants" Root)
+genBoomboom = fun (FunProxy ∷ FunProxy "boomboom" Root)
+
 suite = do
   Test.Unit.suite "BoomBoom.Generic.Interpret" $ do
     Test.Unit.suite "nested variants" $ do
       let
         r = V { c : V { d: B int, e: B int, f: V { g: B int } }}
-        builder = fun (FunProxy ∷ FunProxy "variants" Root) r
-        boomboom = fun (FunProxy ∷ FunProxy "boomboom" Root) r
+        builder = genBuilder r
+        boomboom = genBoomboom r
       test "serializes correctly" $ do
         equal ["c", "d", "8"] (serialize boomboom (builder.c.d 8))
         equal ["c", "e", "9"] (serialize boomboom (builder.c.e 9))
         equal ["c", "f", "g", "10"] (serialize boomboom (builder.c.f.g 10))
+
+        equal
+          (parse boomboom ["c", "d", "8"])
+          (Just $ builder.c.d 8)
+    Test.Unit.suite "record with variants" $ do
+      let
+        r = R { a: V { x: B int, y: R { s: B int, t: B int }}}
+        builder = genBuilder r
+        boomboom = genBoomboom r
+      test "serializes correctly" $ do
+        -- | Record turns into function which takes an input record
+        -- | but in places where are variants expected it should have
+        -- | functions which accepts these variants builders.
+        equal ["x", "8"] (serialize boomboom (builder {a: \b → b.x 8}))
+        equal ["y", "8", "9"] (serialize boomboom (builder {a: \b → b.y { s: 8, t: 9}}))
+
+
+
+
+    -- Test.Unit.suite "nested variants" $ do
 
 
 
