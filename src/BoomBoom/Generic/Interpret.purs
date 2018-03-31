@@ -11,7 +11,7 @@ import Data.Record (get)
 import Data.Record as Data.Record
 import Data.Record.Builder as Record.Builder
 import Data.Variant (Variant, inj)
-import Type.Prelude (class IsSymbol, class ListToRow, class RowLacks, class RowToList, RLProxy(RLProxy), SProxy(SProxy))
+import Type.Prelude (class IsSymbol, class RowLacks, class RowToList, RLProxy(RLProxy), SProxy(SProxy))
 import Type.Row (Cons, Nil, kind RowList)
 
 data R r = R (Record r)
@@ -207,7 +207,7 @@ type ReaderCat v cat a b = ApplicativeCat ((→) v) cat a b
 
 instance algVariantsRootR
   ∷ ( RowToList output ol
-    , ClosedRow ol builder builder
+    , ClosedRow ol builder
     )
   ⇒ Alg "variants" Root "R" (ApplicativeCat ((→) {|builder}) Record.Builder.Builder {} {|output}) ({|builder} → {|output})
   where
@@ -216,7 +216,7 @@ instance algVariantsRootR
 
 instance algVariantsRootV
   ∷ ( RowToList builder bl
-    , ClosedRow bl input input
+    , ClosedRow bl input
     )
   ⇒ Alg
     "variants"
@@ -272,7 +272,7 @@ instance algVariantsRV
     , RowCons fieldName (Variant v) o o'
     , RowLacks fieldName o
     , RowToList builder bl
-    , ClosedRow bl v v
+    , ClosedRow bl v
     )
   ⇒ Alg
     "variants"
@@ -316,7 +316,7 @@ instance algVariantsVR
     , RowCons fieldName {|output} v v'
     , RowLacks fieldName v
     , RowToList output ol
-    , ClosedRow ol builder builder
+    , ClosedRow ol builder
     )
   ⇒ Alg
     "variants"
@@ -349,9 +349,11 @@ instance algVariantsVV
       where
         _fieldName = SProxy ∷ SProxy fieldName
 
-class ClosedRow (input ∷ RowList) (original ∷ # Type) (result ∷ # Type) | input original → result
+-- | If you set of labels are known in other RowList
+-- | you can restrict your "open row" to it.
+class ClosedRow (list ∷ RowList) (row ∷ # Type) | list → row
 
-instance closedRowNil ∷ ClosedRow Nil x ()
+instance closedRowNil ∷ ClosedRow Nil ()
 
-instance closedRowCons ∷ (RowCons name a original' original, RowCons name a result' result, ClosedRow iTail original' result') ⇒ ClosedRow (Cons name x iTail) original result
+instance closedRowCons ∷ (RowCons name a row' row,  ClosedRow tail row') ⇒ ClosedRow (Cons name x tail) row
 
