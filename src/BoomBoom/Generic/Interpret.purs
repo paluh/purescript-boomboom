@@ -22,7 +22,7 @@ data B a = B a
 -- | This kind allows us to represent this option.
 foreign import kind Field
 foreign import data Root ∷ Field
--- | Allow case analysis on constrctor and field name
+-- | Allow case analysis on constrctor.
 foreign import data Field ∷ Symbol → Symbol → Field
 
 data FunProxy (interpreter ∷ Symbol) (field ∷ Field) = FunProxy
@@ -352,7 +352,6 @@ instance algVariantsVV
 -- | If your set of labels is known and you can provide RowList
 -- | with it you can restrict your input "open row" to it.
 class SameLabels (list ∷ RowList) (row ∷ # Type) | list → row
-
 instance sameLabelsNil ∷ SameLabels Nil ()
 instance sameLabelsCons ∷ (RowCons name a row' row,  SameLabels tail row') ⇒ SameLabels (Cons name x tail) row
 
