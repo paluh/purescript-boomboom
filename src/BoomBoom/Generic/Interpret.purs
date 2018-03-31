@@ -196,6 +196,7 @@ instance algBoomBoomFieldB
   where
     alg _ a = addField (SProxy ∷ SProxy parent) (SProxy ∷ SProxy fieldName) a
 
+
 newtype ApplicativeCat appl cat a b = ApplicativeCat (appl (cat a b))
 
 instance semigroupoidApplicativeCat ∷ (Apply appl, Semigroupoid cat) ⇒ Semigroupoid (ApplicativeCat appl cat) where
@@ -206,7 +207,7 @@ type ReaderCat v cat a b = ApplicativeCat ((→) v) cat a b
 
 instance algVariantsRootR
   ∷ ( RowToList output ol
-    , RecordToBuilder ol builder
+    , ClosedRow ol builder builder
     )
   ⇒ Alg "variants" Root "R" (ApplicativeCat ((→) {|builder}) Record.Builder.Builder {} {|output}) ({|builder} → {|output})
   where
@@ -215,7 +216,7 @@ instance algVariantsRootR
 
 instance algVariantsRootV
   ∷ ( RowToList builder bl
-    , BuilderToVariant bl input
+    , ClosedRow bl input input
     )
   ⇒ Alg
     "variants"
@@ -271,7 +272,7 @@ instance algVariantsRV
     , RowCons fieldName (Variant v) o o'
     , RowLacks fieldName o
     , RowToList builder bl
-    , BuilderToVariant bl v
+    , ClosedRow bl v v
     )
   ⇒ Alg
     "variants"
@@ -315,7 +316,7 @@ instance algVariantsVR
     , RowCons fieldName {|output} v v'
     , RowLacks fieldName v
     , RowToList output ol
-    , RecordToBuilder ol builder
+    , ClosedRow ol builder builder
     )
   ⇒ Alg
     "variants"
@@ -348,142 +349,9 @@ instance algVariantsVV
       where
         _fieldName = SProxy ∷ SProxy fieldName
 
+class ClosedRow (input ∷ RowList) (original ∷ # Type) (result ∷ # Type) | input original → result
 
--- | All this __shit__ below is written to allow full
--- | inference of final types of builders.
--- | So please.. ignore this stuff...
+instance closedRowNil ∷ ClosedRow Nil x ()
 
-class VariantToBuilder (variant ∷ RowList) (builder ∷ # Type) | variant → builder, builder → variant
-
-instance v2b
-  ∷ ( ListToRow variantL variant
-    , VariantToBuilderGo variantL (Variant variant) builder
-    )
-  ⇒ VariantToBuilder variantL builder
-
-class VariantToBuilderGo (variant ∷ RowList) (result ∷ Type) (builder ∷ # Type) | variant result → builder
-
-instance variantToBuilderGoNil ∷ VariantToBuilderGo Nil result ()
-
--- | Example:
--- | input: Variant (a ∷ Record ( x ∷ Int ))
--- | output: Record (a ∷ Record ( x ∷ Int ) → input ))
-instance variantToBuilderGoRecord
-  ∷ ( RowToList r rl
-    , RecordToBuilderGo rl result recordBuilder
-    , VariantToBuilderGo tail result tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name (Record recordBuilder → result) tailL') builder
-    )
-  ⇒ VariantToBuilderGo (Cons name (Record r) tail) result  builder
-
--- | Example:
--- | input: Variant (a ∷ Variant ( x ∷ Int ))
--- | output: Record (a ∷ Record ( x ∷ Int → input ))
-instance variantToBuilderGoVariant
-  ∷ ( RowToList v vl
-    , VariantToBuilderGo vl result variantBuilder
-    , VariantToBuilderGo tail result tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name (Record variantBuilder) tailL') builder
-    )
-  ⇒ VariantToBuilderGo (Cons name (Variant v) tail) result builder
-
--- | Example:
--- | input: Variant (a ∷ Int)
--- | output: Record (a ∷ Int → input ))
-instance variantToBuilderGoOther
-  ∷ ( VariantToBuilderGo tail result tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name (a → result) tailL') builder
-    )
-  ⇒ VariantToBuilderGo (Cons name a tail) result builder
-
-class RecordToBuilder (record ∷ RowList) (builder ∷ # Type) | record → builder
-
-instance r2b ∷ (ListToRow variant result, RecordToBuilderGo variant (Record result) builder) ⇒ RecordToBuilder variant builder
-
-class RecordToBuilderGo (record ∷ RowList) (result ∷ Type) (builder ∷ # Type) | record result → builder
-
-instance recordToBuilderGoNil ∷ RecordToBuilderGo Nil result ()
-
--- | Example:
--- | input: Record (a ∷ Variant ( x ∷ Int, y ∷ String ))
--- | output: Record (a ∷ Record ( x ∷ Int → Variant (...), y ∷ String → Variant (..) ) → input)
-instance a_recordToBuilderGoVariant
-  ∷ ( RowToList v vl
-    , VariantToBuilderGo vl (Variant v) variantBuilder
-    , RecordToBuilderGo tail result tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name (Record variantBuilder → (Variant v)) tailL') builder
-    )
-  ⇒ RecordToBuilderGo (Cons name (Variant v) tail) result builder
-
--- | Example:
--- | input: Record (a ∷ Record ( x ∷ Int, Variant (y ∷ Int) ))
--- | output: Record (a ∷ Record ( x ∷ Int, y ∷ (Record (y ∷ Int → Variant (y ∷ Int)))))
-instance b_recordToBuilderGoRecord
-  ∷ ( RowToList r rl
-    , RecordToBuilderGo rl result recordBuilder
-    , RecordToBuilderGo tail result tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name (Record recordBuilder) tailL') builder
-    )
-  ⇒ RecordToBuilderGo (Cons name (Record r) tail) result builder
-
-instance c_recordToBuilderGoOther
-  ∷ ( RecordToBuilderGo tail result tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name a tailL') builder
-    )
-  ⇒ RecordToBuilderGo (Cons name a tail) result builder
-
-class BuilderToRecord (builder ∷ RowList) (record ∷ # Type) | builder → record
-
-instance builderToRecordNil ∷ BuilderToRecord Nil ()
-
-instance g_builderToRecordFunRecord
-  ∷ ( RowToList r rl
-    , BuilderToVariant rl variant
-    , BuilderToRecord tail tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name (Variant variant) tailL') record
-    )
-  ⇒ BuilderToRecord (Cons name ((Record r) → x) tail) record
-
-instance i_builderToRecordOther
-  ∷ ( BuilderToRecord tail tailL'
-    , RowToList tailL' tail'
-    , ListToRow (Cons name a tail') record
-    )
-  ⇒ BuilderToRecord (Cons name a tail) record
-
-class BuilderToVariant (builder ∷ RowList) (variant ∷ # Type) | builder → variant
-
-instance builderToVariantNil ∷ BuilderToVariant Nil ()
-
-instance a_builderToVariantRecord
-  ∷ ( RowToList r rl
-    , BuilderToVariant rl subVariant
-    , BuilderToVariant tail tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name (Variant subVariant) tailL') variant
-    )
-  ⇒ BuilderToVariant (Cons name (Record r) tail) variant
-
-instance b_builderToVariantRecordFun
-  ∷ ( RowToList r rl
-    , BuilderToRecord rl subRecord
-    , BuilderToVariant tail tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name (Record subRecord) tailL') variant
-    )
-  ⇒ BuilderToVariant (Cons name ((Record r) → x) tail) variant
-
-instance c_builderToVariantFun
-  ∷ ( BuilderToVariant tail tail'
-    , RowToList tail' tailL'
-    , ListToRow (Cons name a tailL') variant
-    )
-  ⇒ BuilderToVariant (Cons name (a → x) tail) variant
+instance closedRowCons ∷ (RowCons name a original' original, RowCons name a result' result, ClosedRow iTail original' result') ⇒ ClosedRow (Cons name x iTail) original result
 
