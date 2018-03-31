@@ -207,7 +207,7 @@ type ReaderCat v cat a b = ApplicativeCat ((→) v) cat a b
 
 instance algVariantsRootR
   ∷ ( RowToList output ol
-    , ClosedRow ol builder
+    , SameLabels ol builder
     )
   ⇒ Alg "variants" Root "R" (ApplicativeCat ((→) {|builder}) Record.Builder.Builder {} {|output}) ({|builder} → {|output})
   where
@@ -216,7 +216,7 @@ instance algVariantsRootR
 
 instance algVariantsRootV
   ∷ ( RowToList builder bl
-    , ClosedRow bl input
+    , SameLabels bl input
     )
   ⇒ Alg
     "variants"
@@ -272,7 +272,7 @@ instance algVariantsRV
     , RowCons fieldName (Variant v) o o'
     , RowLacks fieldName o
     , RowToList builder bl
-    , ClosedRow bl v
+    , SameLabels bl v
     )
   ⇒ Alg
     "variants"
@@ -316,7 +316,7 @@ instance algVariantsVR
     , RowCons fieldName {|output} v v'
     , RowLacks fieldName v
     , RowToList output ol
-    , ClosedRow ol builder
+    , SameLabels ol builder
     )
   ⇒ Alg
     "variants"
@@ -351,8 +351,8 @@ instance algVariantsVV
 
 -- | If your set of labels is known and you can provide RowList
 -- | with it you can restrict your input "open row" to it.
-class ClosedRow (list ∷ RowList) (row ∷ # Type) | list → row
+class SameLabels (list ∷ RowList) (row ∷ # Type) | list → row
 
-instance closedRowNil ∷ ClosedRow Nil ()
-instance closedRowCons ∷ (RowCons name a row' row,  ClosedRow tail row') ⇒ ClosedRow (Cons name x tail) row
+instance sameLabelsNil ∷ SameLabels Nil ()
+instance sameLabelsCons ∷ (RowCons name a row' row,  SameLabels tail row') ⇒ SameLabels (Cons name x tail) row
 
