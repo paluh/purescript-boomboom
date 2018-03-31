@@ -3,19 +3,37 @@ module BoomBoom.Prim where
 import Prelude
 
 import Control.Alt (class Alt, (<|>))
+import Control.Apply (lift2)
 import Data.Either (Either(Right, Left))
+import Data.Functor.Invariant (class Invariant, imap)
 import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
 import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Profunctor (class Profunctor, dimap)
 import Data.Record (get, insert)
 import Data.Variant (Variant, inj, on)
 import Partial.Unsafe (unsafeCrashWith)
-import Type.Prelude (class IsSymbol, class RowLacks, SProxy)
+import Type.Prelude (class IsSymbol, class RowLacks, class TypeEquals, SProxy, from)
 
 -- | Our core type - nearly an iso:
 -- | `{ ser: a → tok, prs: tok → Maybe a }`
 newtype BoomBoom tok a = BoomBoom (BoomBoomD tok a a)
 derive instance newtypeBoomBoom ∷ Newtype (BoomBoom tok a) _
+
+instance invariantBoomBoom ∷ Invariant (BoomBoom tok) where
+  imap f g (BoomBoom b) = BoomBoom (dimap g f b)
+
+instance semigroupBoomBoom ∷ (Semigroup tok, TypeEquals a Unit) ⇒ Semigroup (BoomBoom tok a) where
+  append (BoomBoom (BoomBoomD b1)) (BoomBoom (BoomBoomD b2)) = BoomBoom $ BoomBoomD
+    { prs: b1.prs >=> _.tok >>> b2.prs
+    , ser: lift2 (<>) b1.ser b2.ser
+    }
+
+instance monoidBoomBoom ∷ (Monoid tok, TypeEquals a Unit) ⇒ Monoid (BoomBoom tok a) where
+  mempty = BoomBoom $ BoomBoomD
+    { prs: Just <<< { a: from unit, tok: _ }
+    , ser: mempty
+    }
 
 -- | __D__ from diverging as `a'` can diverge from `a`.
 -- | It is enough to express `Applicative` for parsing
@@ -27,6 +45,13 @@ newtype BoomBoomD tok a' a = BoomBoomD
   }
 derive instance newtypeBoomBoomD ∷ Newtype (BoomBoomD tok a' a) _
 derive instance functorBoomBoomD ∷ Functor (BoomBoomD tok a')
+
+instance profunctorBoomBoomD ∷ Profunctor (BoomBoomD tok) where
+  dimap f g (BoomBoomD b) = BoomBoomD
+    { prs: b.prs >>> map \{ a, tok } → { a: g a, tok }
+    , ser: f >>> b.ser
+    }
+
 
 -- | `divergeA` together with `BoomBoomD` `Applicative`
 -- | instance form quite nice API to create by hand
@@ -216,5 +241,4 @@ xrap
   . Newtype n a
   ⇒ BoomBoom tok a
   → BoomBoom tok n
-xrap b = BoomBoom $ wrap <$> unwrap >- b
-
+xrap = imap wrap unwrap
