@@ -349,11 +349,10 @@ instance algVariantsVV
       where
         _fieldName = SProxy ∷ SProxy fieldName
 
--- | If you set of labels are known in other RowList
--- | you can restrict your "open row" to it.
+-- | If your set of labels is known and you can provide RowList
+-- | with it you can restrict your input "open row" to it.
 class ClosedRow (list ∷ RowList) (row ∷ # Type) | list → row
 
 instance closedRowNil ∷ ClosedRow Nil ()
-
 instance closedRowCons ∷ (RowCons name a row' row,  ClosedRow tail row') ⇒ ClosedRow (Cons name x tail) row
 
