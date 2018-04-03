@@ -1,6 +1,6 @@
 # purescript-boomboom
 
-Never hard code your urls again... Just boomboom them all!
+Never hard code your urls again. Boomboom them all!
 
 ## Description
 
