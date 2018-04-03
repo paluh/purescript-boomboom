@@ -8,8 +8,8 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Variant (inj)
 import Global.Unsafe (unsafeStringify)
+import Test.Unit (TestSuite, test)
 import Test.Unit (suite) as Test.Unit
-import Test.Unit (test)
 import Test.Unit.Assert (equal)
 import Type.Prelude (SProxy(..))
 
@@ -19,6 +19,7 @@ derive instance newtypeR ∷ Newtype R _
 instance showR ∷ Show R where
   show = unsafeStringify
 
+suite ∷ ∀ e. TestSuite e
 suite = do
   Test.Unit.suite "BoomBoom.String" $ do
     let

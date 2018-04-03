@@ -3,18 +3,22 @@ module Test.BoomBoom.Generic.Interpret where
 import Prelude
 
 import BoomBoom (parse, serialize)
-import BoomBoom.Generic.Interpret (B(..), InterpretProxy(..), R(..), Root, V(..), interpret)
+import BoomBoom.Generic.Interpret (class Interpret, B(B), R(R), Root, V(V), interpret)
 import BoomBoom.Strings (int)
 import Data.Maybe (Maybe(..))
 import Global.Unsafe (unsafeStringify)
+import Test.Unit (TestSuite, test)
 import Test.Unit (suite) as Test.Unit
-import Test.Unit (test)
 import Test.Unit.Assert (equal)
 import Type.Prelude (SProxy(..))
 
+genBuilder ∷ forall a b. Interpret "builder" Root a b ⇒ a → b
 genBuilder = interpret (SProxy ∷ SProxy "builder")
+
+genBoomboom ∷ forall a b. Interpret "boomboom" Root a b ⇒ a → b
 genBoomboom = interpret (SProxy ∷ SProxy "boomboom")
 
+suite ∷ ∀ e. TestSuite e
 suite = do
   Test.Unit.suite "BoomBoom.Generic.Interpret" $ do
     Test.Unit.suite "nested variants" $ do

@@ -2,15 +2,16 @@ module Test.BoomBoom.Generic where
 
 import Prelude
 
-import BoomBoom.Generic (record)
 import BoomBoom (BoomBoom(BoomBoom), parse, serialize, xrap, (>-))
+import BoomBoom.Generic (record)
 import BoomBoom.Strings (int, variant)
+import BoomBoom.Strings as BoomBoom.Strings
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Variant (inj)
 import Global.Unsafe (unsafeStringify)
+import Test.Unit (TestSuite, test)
 import Test.Unit (suite) as Test.Unit
-import Test.Unit (test)
 import Test.Unit.Assert (equal)
 import Type.Prelude (SProxy(SProxy))
 
@@ -20,6 +21,7 @@ derive instance newtypeR ∷ Newtype R _
 instance showR ∷ Show R where
   show = unsafeStringify
 
+suite :: forall e. TestSuite e
 suite = do
   Test.Unit.suite "BoomBoom.Generic" $ do
     let
@@ -59,7 +61,7 @@ suite = do
       let
         nestedB = variant
           { p1: variant
-              { sp1: ((xrap $ record { x: int, y: int, z: int }) ∷ BoomBoom _ R)
+              { sp1: ((xrap $ record { x: int, y: int, z: int }) ∷ BoomBoom.Strings.BoomBoom R)
               , sp2: int
               }
           , p2: int
