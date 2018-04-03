@@ -228,15 +228,8 @@ type ReaderCat v cat a b = ApplicativeCat ((→) v) cat a b
 
 -- | "builder" interpreter - it produces helper function or record
 -- | which can be used to produce value for serialization. In other
--- | words it simplifies nested variants generation. For example:
--- |
--- | If we have this tree:
--- |
--- | r = V { c : V { d: B int, e: B int, f: V { g: B int } }}
--- |
--- | and interpret it as BoomBoom:
--- |
--- | boomboom = interprter (InterpretProxy ∷ InterpretProxy "boomboom" Root) r
+-- | words it simplifies nested variants generation. Check
+-- | `tests/BoomBoom/Generic/Intepret.purs` for examples.
 instance algBuilderRootR
   ∷ ( RowToList output ol
     , SameLabels ol builder
