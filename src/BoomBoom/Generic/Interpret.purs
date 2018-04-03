@@ -6,6 +6,7 @@ import BoomBoom (BoomBoom)
 import BoomBoom (addChoice, addField, buildRecord, buildVariant, CoproductBuilder, ProductBuilder) as B
 import BoomBoom.Strings (_lit)
 import Data.Either (Either)
+import Data.List (List)
 import Data.Monoid (class Monoid)
 import Data.Record (get)
 import Data.Record as Data.Record
@@ -198,7 +199,7 @@ instance addFieldVariant
 class Prefix tok where
   prefix ∷ ∀ name. (IsSymbol name) ⇒ SProxy name → BoomBoom tok Unit
 
-instance prefixString ∷ Prefix (Array String) where
+instance prefixString ∷ Prefix (List String) where
   prefix = _lit
 
 instance algBoomBoomFieldR

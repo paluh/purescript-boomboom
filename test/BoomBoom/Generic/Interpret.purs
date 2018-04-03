@@ -5,6 +5,7 @@ import Prelude
 import BoomBoom (parse, serialize)
 import BoomBoom.Generic.Interpret (class Interpret, B(B), R(R), Root, V(V), interpret)
 import BoomBoom.Strings (int)
+import Data.List((:), List(..))
 import Data.Maybe (Maybe(..))
 import Global.Unsafe (unsafeStringify)
 import Test.Unit (TestSuite, test)
@@ -27,12 +28,12 @@ suite = do
         builder = genBuilder r
         boomboom = genBoomboom r
       test "serializes correctly" $ do
-        equal ["c", "d", "8"] (serialize boomboom (builder.c.d 8))
-        equal ["c", "e", "9"] (serialize boomboom (builder.c.e 9))
-        equal ["c", "f", "g", "10"] (serialize boomboom (builder.c.f.g 10))
+        equal ("c":"d":"8":Nil) (serialize boomboom (builder.c.d 8))
+        equal ("c":"e":"9":Nil) (serialize boomboom (builder.c.e 9))
+        equal ("c":"f":"g":"10":Nil) (serialize boomboom (builder.c.f.g 10))
 
         equal
-          (parse boomboom ["c", "d", "8"])
+          (parse boomboom ("c":"d":"8":Nil))
           (Just $ builder.c.d 8)
     Test.Unit.suite "record with variants" $ do
       let
@@ -44,10 +45,10 @@ suite = do
         -- | to this builder you should replace all attributes which are
         -- | variants with function. Builder will pass this variant builder
         -- | to your function so you can create final variant easily.
-        equal ["x", "8", "30"] (serialize boomboom (builder {a: \b → b.x 8, b: 30}))
-        equal ["y", "8", "9", "30"] (serialize boomboom (builder {a: \b → b.y { s: 8, t: 9}, b: 30}))
+        equal ("x":"8":"30":Nil) (serialize boomboom (builder {a: \b → b.x 8, b: 30}))
+        equal ("y":"8":"9":"30":Nil) (serialize boomboom (builder {a: \b → b.y { s: 8, t: 9}, b: 30}))
 
-        equal (unsafeStringify $ parse boomboom ["x", "8", "30"]) (unsafeStringify $ Just $ builder {a: \b → b.x 8, b: 30})
-        equal (unsafeStringify $ parse boomboom ["y", "8", "9", "30"]) (unsafeStringify $ Just $  (builder {a: \b → b.y { s: 8, t: 9}, b: 30}))
+        equal (unsafeStringify $ parse boomboom ("x":"8":"30":Nil)) (unsafeStringify $ Just $ builder {a: \b → b.x 8, b: 30})
+        equal (unsafeStringify $ parse boomboom ("y":"8":"9":"30":Nil)) (unsafeStringify $ Just $  (builder {a: \b → b.y { s: 8, t: 9}, b: 30}))
 
 

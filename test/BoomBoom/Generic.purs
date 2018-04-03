@@ -6,6 +6,7 @@ import BoomBoom (BoomBoom(BoomBoom), parse, serialize, xrap, (>-))
 import BoomBoom.Generic (record)
 import BoomBoom.Strings (int, variant)
 import BoomBoom.Strings as BoomBoom.Strings
+import Data.List ((:), List(..))
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Variant (inj)
@@ -28,9 +29,9 @@ suite = do
       recordB = record { x: int, y: int, z: int }
     Test.Unit.suite "simple record boomboom" $ do
       test "serializes correctly" $ do
-        equal ["1", "2", "3"] (serialize recordB { x: 1, y: 2, z: 3 })
+        equal ("1":"2":"3":Nil) (serialize recordB { x: 1, y: 2, z: 3 })
       test "parses correctly" $ do
-        equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB ["1", "2", "3"])
+        equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB ("1":"2":"3":Nil))
 
     let
       variantB = variant
@@ -40,10 +41,10 @@ suite = do
         }
     Test.Unit.suite "simple variant boomboom" $ do
       let
-        wrong = ["wrong", "8"]
-        zi = ["zero"]
-        oi = ["one", "1"]
-        ti = ["two", "2", "3", "4"]
+        wrong = ("wrong":"8":Nil)
+        zi = ("zero":Nil)
+        oi = ("one":"1":Nil)
+        ti = ("two":"2":"3":"4":Nil)
         zv = inj (SProxy ∷ SProxy "zero") unit
         ov = inj (SProxy ∷ SProxy "one") 1
         tv = inj (SProxy ∷ SProxy "two") (R {x: 2, y: 3, z: 4})
@@ -66,7 +67,7 @@ suite = do
               }
           , p2: int
           }
-        i = ["p1", "sp1", "1", "2", "3"]
+        i = ("p1":"sp1":"1":"2":"3":Nil)
         iv = inj (SProxy ∷ SProxy "p1") (inj (SProxy ∷ SProxy "sp1") (R {x: 1, y: 2, z: 3}))
       test "serializes correctly" $ do
         equal i (serialize nestedB iv)
