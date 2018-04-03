@@ -3,10 +3,8 @@ module Test.BoomBoom.Generic where
 import Prelude
 
 import BoomBoom.Generic (record)
-import BoomBoom.Prim (BoomBoom(..), addField, buildRecord, buildVariant, parse, serialize, xrap, (>-))
-import BoomBoom.String (_lit, addChoice, int, lit, string, variant)
-import BoomBoom.String as BoomBoom.String
-import Data.Array (singleton)
+import BoomBoom (BoomBoom(BoomBoom), parse, serialize, xrap, (>-))
+import BoomBoom.Strings (int, variant)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Variant (inj)
@@ -14,7 +12,7 @@ import Global.Unsafe (unsafeStringify)
 import Test.Unit (suite) as Test.Unit
 import Test.Unit (test)
 import Test.Unit.Assert (equal)
-import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
+import Type.Prelude (SProxy(SProxy))
 
 newtype R = R { x ∷ Int, y ∷ Int, z ∷ Int }
 derive instance eqR ∷ Eq R

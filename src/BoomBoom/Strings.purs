@@ -1,11 +1,10 @@
-module BoomBoom.String where
+module BoomBoom.Strings where
 
 import Prelude
 
 import BoomBoom.Generic (class VariantBoomBoom)
 import BoomBoom.Generic (variant) as Generic
-import BoomBoom.Prim (BoomBoom(BoomBoom), BoomBoomD(BoomBoomD), addChoice) as Prim
-import BoomBoom.Prim (VariantBuilder)
+import BoomBoom (BoomBoom(BoomBoom), BoomBoomD(BoomBoomD), addChoice, CoproductBuilder) as B
 import Data.Array (singleton, uncons)
 import Data.Either (Either)
 import Data.Int (fromString)
@@ -14,8 +13,8 @@ import Data.Variant (Variant)
 import Type.Prelude (class IsSymbol, class RowToList, SProxy, reflectSymbol)
 
 type Tok = Array String
-type BoomBoom a = Prim.BoomBoom Tok a
-type BoomBoomD a' a = Prim.BoomBoomD Tok a' a
+type BoomBoom a = B.BoomBoom Tok a
+type BoomBoomD a' a = B.BoomBoomD Tok a' a
 
 
 addChoice
@@ -25,29 +24,29 @@ addChoice
   ⇒ IsSymbol n
   ⇒ SProxy n
   → BoomBoom a
-  → VariantBuilder
+  → B.CoproductBuilder
       Tok
       (Variant s')
       (Either (Variant r) Tok)
       (Either (Variant r') Tok)
-addChoice p = Prim.addChoice p (_lit p)
+addChoice p = B.addChoice p (_lit p)
 
 variant
   ∷ ∀ r rl r'
   . RowToList r rl
-  ⇒ VariantBoomBoom rl r Tok (VariantBuilder Tok (Variant r') (Either (Variant r') Tok) (Either (Variant ()) Tok))
+  ⇒ VariantBoomBoom rl r Tok (B.CoproductBuilder Tok (Variant r') (Either (Variant r') Tok) (Either (Variant ()) Tok))
   ⇒ {|r}
   → BoomBoom (Variant r')
 variant = Generic.variant _lit
 
 int ∷ BoomBoom Int
-int = Prim.BoomBoom $ Prim.BoomBoomD $
+int = B.BoomBoom $ B.BoomBoomD $
   { prs: uncons >=> (\{ head, tail } → { a: _, tok: tail } <$> fromString head)
   , ser: singleton <<< show
   }
 
 litD ∷ ∀ a'. String -> BoomBoomD a' Unit
-litD tok = Prim.BoomBoomD
+litD tok = B.BoomBoomD
   { prs: uncons >=> \{ head, tail } → if head == tok
       then
         Just { a: unit, tok: tail }
@@ -57,16 +56,16 @@ litD tok = Prim.BoomBoomD
   }
 
 lit ∷ String -> BoomBoom Unit
-lit = Prim.BoomBoom <<< litD
+lit = B.BoomBoom <<< litD
 
 _litD ∷ ∀ a' n. IsSymbol n ⇒ SProxy n → BoomBoomD a' Unit
 _litD = litD <<< reflectSymbol
 
 _lit ∷ ∀ n. IsSymbol n ⇒ SProxy n → BoomBoom Unit
-_lit = Prim.BoomBoom <<< _litD
+_lit = B.BoomBoom <<< _litD
 
 string ∷ BoomBoom String
-string = Prim.BoomBoom $ Prim.BoomBoomD $
+string = B.BoomBoom $ B.BoomBoomD $
   { prs: uncons >=> (\{ head, tail } → pure { a: head, tok: tail })
   , ser: singleton
   }

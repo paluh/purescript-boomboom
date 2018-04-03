@@ -1,10 +1,9 @@
-module Test.BoomBoom.String where
+module Test.BoomBoom.Strings where
 
 import Prelude
 
-import BoomBoom.Prim (BoomBoom(..), addField, buildRecord, buildVariant, parse, serialize, (>-))
-import BoomBoom.String (addChoice, int, string)
-import BoomBoom.String as BoomBoom.String
+import BoomBoom (BoomBoom(..), addField, buildRecord, buildVariant, parse, serialize, (>-))
+import BoomBoom.Strings (addChoice, int)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Variant (inj)

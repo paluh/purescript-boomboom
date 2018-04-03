@@ -2,7 +2,7 @@ module BoomBoom.Generic where
 
 import Prelude
 
-import BoomBoom.Prim (BoomBoom, RecordBuilder(..), VariantBuilder, addChoice, addField, buildRecord, buildVariant)
+import BoomBoom (BoomBoom, CoproductBuilder, ProductBuilder, addChoice, addField, buildRecord, buildVariant)
 import Data.Either (Either)
 import Data.Monoid (class Monoid)
 import Data.Record (get)
@@ -29,7 +29,7 @@ instance a_variantSingleton
       (Cons n (BoomBoom tok fb) Nil)
       ir
       tok
-      (VariantBuilder tok (Variant p') (Either (Variant s') tok) (Either (Variant s) tok))
+      (CoproductBuilder tok (Variant p') (Either (Variant s') tok) (Either (Variant s) tok))
   where
   variantImpl _ toPrefix r = addChoice _n p (get _n r)
     where
@@ -43,13 +43,13 @@ instance b_variantCons
     , IsSymbol n
     , Semigroup tok
     , Eq tok
-    , VariantBoomBoom tail ir tok (VariantBuilder tok (Variant p') (Either (Variant s'') tok) (Either (Variant s') tok))
+    , VariantBoomBoom tail ir tok (CoproductBuilder tok (Variant p') (Either (Variant s'') tok) (Either (Variant s') tok))
     )
   ⇒ VariantBoomBoom
       (Cons n (BoomBoom tok fb) tail)
       ir
       tok
-      (VariantBuilder tok (Variant p') (Either (Variant s'') tok) (Either (Variant s) tok))
+      (CoproductBuilder tok (Variant p') (Either (Variant s'') tok) (Either (Variant s) tok))
   where
   variantImpl _ toPrefix r = addChoice _n p (get _n r) <<< tail
     where
@@ -61,7 +61,7 @@ instance b_variantCons
 variant
   ∷ ∀ r rl r' tok
   . RowToList r rl
-  ⇒ VariantBoomBoom rl r tok (VariantBuilder tok (Variant r') (Either (Variant r') tok) (Either (Variant ()) tok))
+  ⇒ VariantBoomBoom rl r tok (CoproductBuilder tok (Variant r') (Either (Variant r') tok) (Either (Variant ()) tok))
   ⇒ (∀ n. IsSymbol n ⇒ SProxy n → BoomBoom tok Unit)
   → {|r}
   → BoomBoom tok (Variant r')
@@ -74,7 +74,7 @@ variant toPrefix r = buildVariant (variantImpl (RLProxy ∷ RLProxy rl) toPrefix
 class RecordBoomBoom irl ir builder | irl → builder where
   recordImpl ∷ RLProxy irl → {|ir} → builder
 
-instance a_recordNil ∷ (Monoid tok) ⇒ RecordBoomBoom Nil ir (RecordBuilder tok s p p) where
+instance a_recordNil ∷ (Monoid tok) ⇒ RecordBoomBoom Nil ir (ProductBuilder tok s p p) where
   recordImpl _ _ = id
 
 instance b_recordCons
@@ -85,12 +85,12 @@ instance b_recordCons
     , RowLacks n s
     , IsSymbol n
     , Semigroup tok
-    , RecordBoomBoom tail ir (RecordBuilder tok {|s'} {|p'} {|p''})
+    , RecordBoomBoom tail ir (ProductBuilder tok {|s'} {|p'} {|p''})
     )
   ⇒ RecordBoomBoom
       (Cons n (BoomBoom tok b) tail)
       ir
-      (RecordBuilder tok {|s'} {|p} {|p''})
+      (ProductBuilder tok {|s'} {|p} {|p''})
   where
   recordImpl _ r = addField _n (get _n r) >>> tail
     where
@@ -100,7 +100,7 @@ instance b_recordCons
 record
   ∷ ∀ p r rl tok
   . RowToList r rl
-  ⇒ RecordBoomBoom rl r (RecordBuilder tok {|p} {} {|p})
+  ⇒ RecordBoomBoom rl r (ProductBuilder tok {|p} {} {|p})
   ⇒ {|r}
   → BoomBoom tok {|p}
 record r = buildRecord (recordImpl (RLProxy ∷ RLProxy rl) r)

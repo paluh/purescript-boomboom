@@ -2,9 +2,9 @@ module BoomBoom.Generic.Interpret where
 
 import Prelude
 
-import BoomBoom.Prim (addChoice, addField, buildRecord, buildVariant) as Prim
-import BoomBoom.Prim (BoomBoom, RecordBuilder, VariantBuilder)
-import BoomBoom.String (_lit)
+import BoomBoom (BoomBoom)
+import BoomBoom (addChoice, addField, buildRecord, buildVariant, CoproductBuilder, ProductBuilder) as B
+import BoomBoom.Strings (_lit)
 import Data.Either (Either)
 import Data.Monoid (class Monoid)
 import Data.Record (get)
@@ -14,99 +14,119 @@ import Data.Variant (Variant, inj)
 import Type.Prelude (class IsSymbol, class RowLacks, class RowToList, RLProxy(RLProxy), SProxy(SProxy))
 import Type.Row (Cons, Nil, kind RowList)
 
-data R r = R (Record r)
-data V r = V (Record r)
-data B a = B a
+-- | Here we are defining machinery for "tree of records" interpretation.
+-- | As we are defining this tree on the type level and operating on it
+-- | through type classes this stragegy should not suffer
+-- | from the "expression problem" and should be extensible -
+-- | you should be able to extend given node set
+-- | but also interpretation set for predefined nodes.
+-- |
+-- | This interpreting machinery allows to run transformations similar to
+-- | catamorphisms but also less elegant/simple scenarios which require
+-- | information about parent node too.
+-- |
+
+data R a = R (Record a)
+data V a = V (Record a)
+data B t = B t
 
 -- | Only root of our tree is not a field of a record.
 -- | This kind allows us to represent this option.
 foreign import kind Field
 foreign import data Root ∷ Field
--- | Allow case analysis on constrctor.
+-- | Allow case analysis on constrctor:
+-- | 1. Parent name (this provides a way to
+-- | break usual "locality" of *morphisms
+-- | algebras which is required in case of
+-- | BoomBooms generation).
+-- | 2. Field name which we are in.
 foreign import data Field ∷ Symbol → Symbol → Field
 
-data FunProxy (interpreter ∷ Symbol) (field ∷ Field) = FunProxy
+data InterpretProxy (interpreter ∷ Symbol) (field ∷ Field) = InterpretProxy
 
-data MapProxy (interpreter ∷ Symbol) (constructor ∷ Symbol) = MapProxy
+data MapProxy (interpreter ∷ Symbol) (parent ∷ Symbol) = MapProxy
 
-class MapRecord interpreter constructor rl i o | interpreter rl → o where
-  mapRecord ∷ MapProxy interpreter constructor → RLProxy rl → Record i → o
+class MapRecord interpreter parent il i o | interpreter il → o where
+  mapRecord ∷ MapProxy interpreter parent → RLProxy il → Record i → o
 
 instance a_mapRecordNil
   ∷ Category builder
-  ⇒ MapRecord interpreter constructor Nil i (builder o o) where
+  ⇒ MapRecord interpreter parent Nil i (builder o o) where
   mapRecord _ _ r = id
 
 instance b_mapRecordConsNil
-  ∷ ( Fun interpreter (Field constructor fieldName) field (builder o o')
+  ∷ ( Interpret interpreter (Field parent fieldName) field (builder o o')
     , IsSymbol interpreter
     , IsSymbol fieldName
     , RowCons fieldName field i' i
     , Semigroupoid builder
     )
-  ⇒ MapRecord interpreter constructor (Cons fieldName field Nil) i (builder o o') where
-  mapRecord _ _ r = fun (FunProxy ∷ FunProxy interpreter (Field constructor fieldName)) (Data.Record.get _n r)
+  ⇒ MapRecord interpreter parent (Cons fieldName field Nil) i (builder o o') where
+  mapRecord _ _ r = interpret context (Data.Record.get _n r)
     where
     _n = SProxy ∷ SProxy fieldName
+    context = InterpretProxy ∷ InterpretProxy interpreter (Field parent fieldName)
 
 instance c_mapRecordCons
-  ∷ ( Fun interpreter (Field constructor fieldName) field (builder o o')
+  ∷ ( Interpret interpreter (Field parent fieldName) field (builder o o')
     , IsSymbol interpreter
     , IsSymbol fieldName
     , RowCons fieldName field i' i
-    , MapRecord interpreter constructor tail i (builder o' o'')
+    , MapRecord interpreter parent tail i (builder o' o'')
     , Semigroupoid builder
     )
-  ⇒ MapRecord interpreter constructor (Cons fieldName field tail) i (builder o o'')
+  ⇒ MapRecord interpreter parent (Cons fieldName field tail) i (builder o o'')
   where
-  mapRecord mp _ r = fun (FunProxy ∷ FunProxy interpreter (Field constructor fieldName)) (Data.Record.get _n r) >>> tail
+  mapRecord mp _ r = interpret (InterpretProxy ∷ InterpretProxy interpreter (Field parent fieldName)) (Data.Record.get _n r) >>> tail
     where
     _n = SProxy ∷ SProxy fieldName
     tail = mapRecord mp (RLProxy ∷ RLProxy tail) r
 
-class Fun interpreter field a b | interpreter field a → b where
-  fun ∷ FunProxy interpreter field  → a → b
+class Interpret interpreter field a b | interpreter field a → b where
+  interpret ∷ InterpretProxy interpreter field  → a → b
 
-instance funR
-  ∷ ( Alg interpreter field "R" r' r''
+instance interpretR
+  ∷ ( Alg interpreter field (R r) r' r''
     , RowToList r rl
     , MapRecord interpreter "R" rl r r')
-  ⇒ Fun interpreter field (R r) r''
+  ⇒ Interpret interpreter field (R r) r''
   where
-  fun _ (R r) = alg (AlgProxy ∷ AlgProxy interpreter field "R") $ (mapRecord (MapProxy ∷ MapProxy interpreter "R") (RLProxy ∷ RLProxy rl) r)
+  interpret _ (R r) = alg (AlgProxy ∷ AlgProxy interpreter field (R r)) $ (mapRecord (MapProxy ∷ MapProxy interpreter "R") (RLProxy ∷ RLProxy rl) r)
 
-instance funV
-  ∷ ( Alg interpreter field "V" r' r''
+instance interpretV
+  ∷ ( Alg interpreter field (V r) r' r''
     , RowToList r rl
     , MapRecord interpreter "V" rl r r')
-  ⇒ Fun interpreter field (V r) r''
+  ⇒ Interpret interpreter field (V r) r''
   where
-  fun _ (V r) = alg (AlgProxy ∷ AlgProxy interpreter field "V") $ (mapRecord (MapProxy ∷ MapProxy interpreter "V") (RLProxy ∷ RLProxy rl) r)
+  interpret _ (V r) = alg (AlgProxy ∷ AlgProxy interpreter field (V r)) $ (mapRecord (MapProxy ∷ MapProxy interpreter "V") (RLProxy ∷ RLProxy rl) r)
 
-instance funB
-  ∷ (Alg interpreter field "B" a a')
-  ⇒ Fun interpreter field (B a) a'
+instance interpretB
+  ∷ (Alg interpreter field (B a) a a')
+  ⇒ Interpret interpreter field (B a) a'
   where
-  fun _ (B a) = alg (AlgProxy ∷ AlgProxy interpreter field "B") $ a
+  interpret _ (B a) = alg (AlgProxy ∷ AlgProxy interpreter field (B a)) $ a
 
-data AlgProxy (interpreter ∷ Symbol) (field ∷ Field) (constructor ∷ Symbol) = AlgProxy
--- 
--- -- | I'm not sure if this functional dependencie can be so restrictive
--- -- | but it is not clear how to express empty record cases without
--- -- | the first one
-class Alg interpreter field constructor a b | interpreter field constructor → a, interpreter field constructor a → b where
-  alg ∷ AlgProxy interpreter field constructor → a → b
+-- | We are storing here:
+-- | * name of our interpreter
+-- | * field information (parent constructor name + field name)
+-- | * original term type (like in paramorphism)
+data AlgProxy (interpreter ∷ Symbol) (field ∷ Field) (term ∷ Type) = AlgProxy
+
+-- | I'm not sure about these functional dependencies but without them we have a problem...
+class Alg interpreter field term a b | interpreter field term → a, interpreter field term a → b where
+  alg ∷ AlgProxy interpreter field term → a → b
 
 -- | "unwrap" interpreter which just
 -- | drops "R", "V" and "B" construtors
 
-instance algUnwrapRootR ∷ Alg "unwrap" Root "R" (Record.Builder.Builder {} {|r}) {|r} where
+instance algUnwrapRootR ∷ Alg "unwrap" Root (R o) (Record.Builder.Builder {} {|r}) {|r} where
   alg _ r = Record.Builder.build r {}
 
-instance algUnwrapRootV ∷ Alg "unwrap" Root "V" (Record.Builder.Builder {} {|r}) {|r} where
+instance algUnwrapRootV ∷ Alg "unwrap" Root (V o) (Record.Builder.Builder {} {|r}) {|r} where
   alg _ r = Record.Builder.build r {}
 
-instance algUnwrapRootB ∷ Alg "unwrap" Root "B" a a where
+instance algUnwrapRootB ∷ Alg "unwrap" Root (B o) a a where
   alg _ a = a
 
 instance algUnwrapFieldV
@@ -114,7 +134,7 @@ instance algUnwrapFieldV
     , RowLacks fieldName prs
     , RowCons fieldName {|r} prs prs'
     )
-  ⇒ Alg "unwrap" (Field parent fieldName) "V" (Record.Builder.Builder {} {|r}) (Record.Builder.Builder {|prs} {|prs'})
+  ⇒ Alg "unwrap" (Field parent fieldName) (V o) (Record.Builder.Builder {} {|r}) (Record.Builder.Builder {|prs} {|prs'})
   where
   alg _ r = Record.Builder.insert (SProxy ∷ SProxy fieldName) (Record.Builder.build r {})
 
@@ -123,7 +143,7 @@ instance algUnwrapFieldR
     , RowLacks fieldName prs
     , RowCons fieldName {|r} prs prs'
     )
-  ⇒ Alg "unwrap" (Field parent fieldName) "R" (Record.Builder.Builder {} {|r}) (Record.Builder.Builder {|prs} {|prs'})
+  ⇒ Alg "unwrap" (Field parent fieldName) (R o) (Record.Builder.Builder {} {|r}) (Record.Builder.Builder {|prs} {|prs'})
   where
   alg _ r = Record.Builder.insert (SProxy ∷ SProxy fieldName) (Record.Builder.build r {})
 
@@ -132,17 +152,20 @@ instance algUnwrapFieldB
     , RowCons fieldName a prs prs'
     , RowLacks fieldName prs
     )
-  ⇒ Alg "unwrap" (Field parent fieldName) "B" a (Record.Builder.Builder {|prs} {|prs'})
+  ⇒ Alg "unwrap" (Field parent fieldName) (B o) a (Record.Builder.Builder {|prs} {|prs'})
   where
   alg _ a = Record.Builder.insert (SProxy ∷ SProxy fieldName) a
 
-instance algBoomBoomRootR ∷ Alg "boomboom" Root "R" (RecordBuilder tok r {} r) (BoomBoom tok r) where
-  alg _ r = Prim.buildRecord r
+-- | "boomboom" interpreter which builds a BoomBoom from our tree
+-- | where `V` represents variant, `R` represents record and `B` holds
+-- | `BoomBoom`.
+instance algBoomBoomRootR ∷ Alg "boomboom" Root (R o) (B.ProductBuilder tok r {} r) (BoomBoom tok r) where
+  alg _ r = B.buildRecord r
 
-instance algBoomBoomRootV ∷ Alg "boomboom" Root "V" (VariantBuilder tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)) (BoomBoom tok (Variant r)) where
-  alg _ r = Prim.buildVariant r
+instance algBoomBoomRootV ∷ Alg "boomboom" Root (V o) (B.CoproductBuilder tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)) (BoomBoom tok (Variant r)) where
+  alg _ r = B.buildVariant r
 
-instance algBoomBoomRootB ∷ Alg "boomboom" Root "B" (BoomBoom tok a) (BoomBoom tok a) where
+instance algBoomBoomRootB ∷ Alg "boomboom" Root (B o) (BoomBoom tok a) (BoomBoom tok a) where
   alg _ a = a
 
 class AddField parent name a b | parent a → b where
@@ -155,8 +178,8 @@ instance addFieldRecord
     , RowLacks name p
     , IsSymbol name
     )
-  ⇒ AddField "R" name (BoomBoom tok a) (RecordBuilder tok {|s} {|p} {|p'}) where
-  addField _ _ a = Prim.addField (SProxy ∷ SProxy name) a
+  ⇒ AddField "R" name (BoomBoom tok a) (B.ProductBuilder tok {|s} {|p} {|p'}) where
+  addField _ _ a = B.addField (SProxy ∷ SProxy name) a
 
 instance addFieldVariant
   ∷ ( RowCons name a r' r
@@ -168,9 +191,9 @@ instance addFieldVariant
     , Eq tok
     , Prefix tok
     )
-  ⇒ AddField "V" name (BoomBoom tok a) (VariantBuilder tok (Variant s) (Either (Variant r) tok) (Either (Variant r') tok))
+  ⇒ AddField "V" name (BoomBoom tok a) (B.CoproductBuilder tok (Variant s) (Either (Variant r) tok) (Either (Variant r') tok))
   where
-  addField _ _ b = Prim.addChoice (SProxy ∷ SProxy name) (prefix (SProxy ∷ SProxy name)) b
+  addField _ _ b = B.addChoice (SProxy ∷ SProxy name) (prefix (SProxy ∷ SProxy name)) b
 
 class Prefix tok where
   prefix ∷ ∀ name. (IsSymbol name) ⇒ SProxy name → BoomBoom tok Unit
@@ -180,22 +203,21 @@ instance prefixString ∷ Prefix (Array String) where
 
 instance algBoomBoomFieldR
   ∷ (AddField parent fieldName (BoomBoom tok {|r}) b)
-  ⇒ Alg "boomboom" (Field parent fieldName) "R" (RecordBuilder tok {|r} {} {|r}) b
+  ⇒ Alg "boomboom" (Field parent fieldName) (R o) (B.ProductBuilder tok {|r} {} {|r}) b
   where
-  alg _ r = addField  (SProxy ∷ SProxy parent) (SProxy ∷ SProxy fieldName) (Prim.buildRecord r)
+  alg _ r = addField  (SProxy ∷ SProxy parent) (SProxy ∷ SProxy fieldName) (B.buildRecord r)
 
 instance algBoomBoomFieldV
   ∷ (AddField parent fieldName (BoomBoom tok (Variant r)) b)
-  ⇒ Alg "boomboom" (Field parent fieldName) "V" (VariantBuilder tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)) b
+  ⇒ Alg "boomboom" (Field parent fieldName) (V o) (B.CoproductBuilder tok (Variant r) (Either (Variant r) tok) (Either (Variant ()) tok)) b
   where
-  alg _ r = addField (SProxy ∷ SProxy parent) (SProxy ∷ SProxy fieldName) (Prim.buildVariant r)
+  alg _ r = addField (SProxy ∷ SProxy parent) (SProxy ∷ SProxy fieldName) (B.buildVariant r)
 
 instance algBoomBoomFieldB
   ∷ (AddField parent fieldName (BoomBoom tok a) b)
-  ⇒ Alg "boomboom" (Field parent fieldName) "B" (BoomBoom tok a) b
+  ⇒ Alg "boomboom" (Field parent fieldName) (B o) (BoomBoom tok a) b
   where
     alg _ a = addField (SProxy ∷ SProxy parent) (SProxy ∷ SProxy fieldName) a
-
 
 newtype ApplicativeCat appl cat a b = ApplicativeCat (appl (cat a b))
 
@@ -204,48 +226,57 @@ instance semigroupoidApplicativeCat ∷ (Apply appl, Semigroupoid cat) ⇒ Semig
 
 type ReaderCat v cat a b = ApplicativeCat ((→) v) cat a b
 
-
-instance algVariantsRootR
+-- | "builder" interpreter - it produces helper function or record
+-- | which can be used to produce value for serialization. In other
+-- | words it simplifies nested variants generation. For example:
+-- |
+-- | If we have this tree:
+-- |
+-- | r = V { c : V { d: B int, e: B int, f: V { g: B int } }}
+-- |
+-- | and interpret it as BoomBoom:
+-- |
+-- | boomboom = interprter (InterpretProxy ∷ InterpretProxy "boomboom" Root) r
+instance algBuilderRootR
   ∷ ( RowToList output ol
     , SameLabels ol builder
     )
-  ⇒ Alg "variants" Root "R" (ApplicativeCat ((→) {|builder}) Record.Builder.Builder {} {|output}) ({|builder} → {|output})
+  ⇒ Alg "builder" Root (R o) (ApplicativeCat ((→) {|builder}) Record.Builder.Builder {} {|output}) ({|builder} → {|output})
   where
     alg _ (ApplicativeCat r2rb) = \r → (Record.Builder.build (r2rb r) {})
 
-
-instance algVariantsRootV
+instance algBuilderRootV
   ∷ ( RowToList builder bl
     , SameLabels bl input
     )
   ⇒ Alg
-    "variants"
+    "builder"
     Root
-    "V"
+    (V o)
     (ApplicativeCat ((→) (Variant input → Variant input)) Record.Builder.Builder {} {|builder})
     {|builder}
   where
     alg _ (ApplicativeCat v2rb) = Record.Builder.build (v2rb id) {}
 
-instance algVariantsRB
-  ∷ ( RowCons fieldName a i i'
-    , RowLacks fieldName i
+instance algBuilderRB
+  ∷ ( RowCons fieldName a builder builder'
+    , RowLacks fieldName builder
     , IsSymbol fieldName
-    , RowCons fieldName a o o'
-    , RowLacks fieldName o
+    , RowCons fieldName a output output'
+    , RowLacks fieldName output
     )
   ⇒ Alg
-    "variants"
+    "builder"
     (Field "R" fieldName)
-    "B"
+    (B o)
     (BoomBoom tok a)
-    (ApplicativeCat ((→) {|i'}) Record.Builder.Builder {|o} {|o'})
+    (ApplicativeCat ((→) {|builder'}) Record.Builder.Builder {|output} {|output'})
   where
     alg _ _ = ApplicativeCat (\i → Record.Builder.insert _fieldName (get _fieldName i))
       where
         _fieldName = SProxy ∷ SProxy fieldName
 
-instance algVariantsRR
+instance algBuilderRR
   ∷ ( RowCons fieldName {|subbuilder} builder builder'
     , RowLacks fieldName builder
     , IsSymbol fieldName
@@ -253,9 +284,9 @@ instance algVariantsRR
     , RowLacks fieldName output
     )
   ⇒ Alg
-    "variants"
+    "builder"
     (Field "R" fieldName)
-    "R"
+    (R o)
     (ApplicativeCat ((→) {|subbuilder}) Record.Builder.Builder {} {|suboutput})
     (ApplicativeCat ((→) {|builder'}) Record.Builder.Builder {|output} {|output'})
   where
@@ -265,21 +296,21 @@ instance algVariantsRR
         _fieldName = SProxy ∷ SProxy fieldName
         toSubrecord i = Record.Builder.build (i2rb i) {}
 
-instance algVariantsRV
-  ∷ ( RowCons fieldName ({|builder} → Variant v) i i'
-    , RowLacks fieldName i
+instance algBuilderRV
+  ∷ ( RowCons fieldName ({|subbuilder} → Variant v) builder builder'
+    , RowLacks fieldName builder
     , IsSymbol fieldName
-    , RowCons fieldName (Variant v) o o'
-    , RowLacks fieldName o
-    , RowToList builder bl
+    , RowCons fieldName (Variant v) output output'
+    , RowLacks fieldName output
+    , RowToList subbuilder bl
     , SameLabels bl v
     )
   ⇒ Alg
-    "variants"
+    "builder"
     (Field "R" fieldName)
-    "V"
-    (ApplicativeCat ((→) (Variant v → Variant v)) Record.Builder.Builder {} {|builder})
-    (ApplicativeCat ((→) {|i'}) Record.Builder.Builder {|o} {|o'})
+    (V o)
+    (ApplicativeCat ((→) (Variant v → Variant v)) Record.Builder.Builder {} {|subbuilder})
+    (ApplicativeCat ((→) {|builder'}) Record.Builder.Builder {|output} {|output'})
   where
     alg _ (ApplicativeCat v2rb) = ApplicativeCat useSubvariants
       where
@@ -291,7 +322,7 @@ instance algVariantsRV
           in
             Record.Builder.insert _fieldName (onSubvariants toSubvariants)
 
-instance algVariantsVB
+instance algBuilderVB
   ∷ ( RowCons fieldName a v v'
     , RowLacks fieldName v
     , IsSymbol fieldName
@@ -299,9 +330,9 @@ instance algVariantsVB
     , RowLacks fieldName r
     )
   ⇒ Alg
-    "variants"
+    "builder"
     (Field "V" fieldName)
-    "B"
+    (B o)
     (BoomBoom tok a)
     (ApplicativeCat ((→) (Variant v' → result)) Record.Builder.Builder {|r} {|r'})
   where
@@ -309,21 +340,21 @@ instance algVariantsVB
       where
         _fieldName = SProxy ∷ SProxy fieldName
 
-instance algVariantsVR
-  ∷ ( RowCons fieldName ({|builder} → result) o o'
-    , RowLacks fieldName o
+instance algBuilderVR
+  ∷ ( RowCons fieldName ({|subbuilder} → result) output output'
+    , RowLacks fieldName output
     , IsSymbol fieldName
-    , RowCons fieldName {|output} v v'
+    , RowCons fieldName {|suboutput} v v'
     , RowLacks fieldName v
-    , RowToList output ol
-    , SameLabels ol builder
+    , RowToList suboutput ol
+    , SameLabels ol subbuilder
     )
   ⇒ Alg
-    "variants"
+    "builder"
     (Field "V" fieldName)
-    "R"
-    (ApplicativeCat ((→) {|builder}) Record.Builder.Builder {} {|output})
-    (ApplicativeCat ((→) (Variant v' → result)) Record.Builder.Builder {|o} {|o'})
+    (R o)
+    (ApplicativeCat ((→) {|subbuilder}) Record.Builder.Builder {} {|suboutput})
+    (ApplicativeCat ((→) (Variant v' → result)) Record.Builder.Builder {|output} {|output'})
   where
     alg _ (ApplicativeCat i2rb) =
       ApplicativeCat (\v2r → Record.Builder.insert _fieldName (\r → v2r (inj _fieldName $ toSubrecord r)))
@@ -331,7 +362,7 @@ instance algVariantsVR
         _fieldName = SProxy ∷ SProxy fieldName
         toSubrecord i = Record.Builder.build (i2rb i) {}
 
-instance algVariantsVV
+instance algBuilderVV
   ∷ ( RowCons fieldName a v v'
     , RowLacks fieldName v
     , IsSymbol fieldName
@@ -339,9 +370,9 @@ instance algVariantsVV
     , RowLacks fieldName n
     )
   ⇒ Alg
-    "variants"
+    "builder"
     (Field "V" fieldName)
-    "V"
+    (V o)
     (ApplicativeCat ((→) (a → result)) Record.Builder.Builder {} {|r})
     (ApplicativeCat ((→) (Variant v' → result)) Record.Builder.Builder {|n} {|n'})
   where
@@ -349,9 +380,8 @@ instance algVariantsVV
       where
         _fieldName = SProxy ∷ SProxy fieldName
 
--- | If your set of labels is known and you can provide RowList
--- | with it you can restrict your input "open row" to it.
+-- -- | If your set of labels is known and you can provide RowList
+-- -- | with it you can restrict your input "open row" to it.
 class SameLabels (list ∷ RowList) (row ∷ # Type) | list → row
 instance sameLabelsNil ∷ SameLabels Nil ()
 instance sameLabelsCons ∷ (RowCons name a row' row,  SameLabels tail row') ⇒ SameLabels (Cons name x tail) row
-
