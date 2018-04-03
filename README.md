@@ -4,13 +4,13 @@ Never hard code your urls again... Just boomboom them all!
 
 ## Description
 
-Bidirectional routing library with principled plumbing which provides an easy to use generic sugar for variants and records.
+Bidirectional routing library with principled plumbing which provides easy to use generic sugar for variants and records.
 
-Still β stage... and docs in pre-α ;-)
+Still β stage...
 
 ## `BoomBoom`
 
-The core type of this library is `BoomBoom.Prim.BoomBoom` which translates really to this simple record:
+The core type of this library is `BoomBoom.BoomBoom` which translates really to this simple record:
 
 ```purescript
 newtype BoomBoom tok a = BoomBoom { prs: tok → { a: Maybe a, tok ∷ tok }, ser: a → tok }
@@ -98,9 +98,72 @@ test "parses correctly" $ do
   equal (Just iv) (parse nestedB i)
 ```
 
+### Typelevel interpretation and helpers
+
+Let's assume that we have routes from previous example and want to produce this serialization `p1/sp1/1/2/3` result. To do this we have to build our variant by hand (as in previous example):
+
+```purescript
+  serialize $ inj (SProxy ∷ SProxy "p1") (inj (SProxy ∷ SProxy "sp1") {x: 1, y: 2, z: 3})
+```
+
+This API clutters our code with usage of all these `inj` functions and `SProxy` constructors.
+
+In `BoomBoom.Generic.Interpret` you can find "type level interpreters" which are able to produce `BoomBooms` but also easy to use builders of values (variants/records) from "records tree".
+Instead of building `BoomBooms` directly you should define your tree using provided constructors:
+
+```purescript
+import BoomBoom.Generic.Interpret (V, R, B)
+import BoomBoom.Strings (int)
+
+desc = V
+  { p1: V
+      { sp1: R { x: B int, y: B int, z: B int }
+      , sp2: B int
+      }
+  , p2: B int
+  }
+```
+
+Now you can produce your `BoomBoom` value but also helpers:
+
+```purescript
+import BoomBoom.Generic.Interpret (interpret, Root, InterpretProxy)
+
+-- | Generate a builder
+builder = interpret (SProxy ∷ SProxy "builder") desc
+
+-- | Generate a BoomBoom
+boomboom = interpret (SProxy ∷ SProxy "boomboom") desc
+
+```
+
+This `builder` is a record (for variants build up) or function (for records build up) which helps us build values ready for serialization. So for example this:
+
+```purescript
+v = builder.p1.sp1 {x: 1, y: 2, z: 3}
+```
+
+Is equivalent of this:
+
+```purescript
+v = inj (SProxy ∷ SProxy "p1") (inj (SProxy ∷ SProxy "sp1") {x: 1, y: 2, z: 3})
+```
+
+Now we can use this value and serialize it:
+
+```purescript
+serialize boomboom v
+```
+
+Output (in case of `BoomBoom.Strings` serialization):
+
+```purescript
+["p1", "sp1", "1", "2", "3"]
+```
+
 ### `Applicative` API
 
-And here is completely different approach which uses `apply` and `BoomBoom.Prim.diverge` (aka `(>-)`):
+And here is completely different approach which uses `apply` and `BoomBoom.diverge` (aka `(>-)`):
 
 
 ```purescript
@@ -125,15 +188,9 @@ Output:
 300test800
 ```
 
-### TODO
+## TODO
 
-I'm still working on convinient API for serialization because:
-
-```purescript
-  serialize $ inj (SProxy ∷ SProxy "p1") (inj (SProxy ∷ SProxy "sp1") (R {x: 1, y: 2, z: 3}))
-```
-
-is not a nice API :-)
+There is ongoing work for "API interpreters" which would generate records clients and server helpers but also docs etc.
 
 ## Credits
 

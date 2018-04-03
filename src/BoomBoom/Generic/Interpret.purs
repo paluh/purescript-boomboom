@@ -62,7 +62,7 @@ instance b_mapRecordConsNil
     , Semigroupoid builder
     )
   ⇒ MapRecord interpreter parent (Cons fieldName field Nil) i (builder o o') where
-  mapRecord _ _ r = interpret context (Data.Record.get _n r)
+  mapRecord _ _ r = interpretImpl context (Data.Record.get _n r)
     where
     _n = SProxy ∷ SProxy fieldName
     context = InterpretProxy ∷ InterpretProxy interpreter (Field parent fieldName)
@@ -77,13 +77,13 @@ instance c_mapRecordCons
     )
   ⇒ MapRecord interpreter parent (Cons fieldName field tail) i (builder o o'')
   where
-  mapRecord mp _ r = interpret (InterpretProxy ∷ InterpretProxy interpreter (Field parent fieldName)) (Data.Record.get _n r) >>> tail
+  mapRecord mp _ r = interpretImpl (InterpretProxy ∷ InterpretProxy interpreter (Field parent fieldName)) (Data.Record.get _n r) >>> tail
     where
     _n = SProxy ∷ SProxy fieldName
     tail = mapRecord mp (RLProxy ∷ RLProxy tail) r
 
 class Interpret interpreter field a b | interpreter field a → b where
-  interpret ∷ InterpretProxy interpreter field  → a → b
+  interpretImpl ∷ InterpretProxy interpreter field  → a → b
 
 instance interpretR
   ∷ ( Alg interpreter field (R r) r' r''
@@ -91,7 +91,7 @@ instance interpretR
     , MapRecord interpreter "R" rl r r')
   ⇒ Interpret interpreter field (R r) r''
   where
-  interpret _ (R r) = alg (AlgProxy ∷ AlgProxy interpreter field (R r)) $ (mapRecord (MapProxy ∷ MapProxy interpreter "R") (RLProxy ∷ RLProxy rl) r)
+  interpretImpl _ (R r) = alg (AlgProxy ∷ AlgProxy interpreter field (R r)) $ (mapRecord (MapProxy ∷ MapProxy interpreter "R") (RLProxy ∷ RLProxy rl) r)
 
 instance interpretV
   ∷ ( Alg interpreter field (V r) r' r''
@@ -99,13 +99,13 @@ instance interpretV
     , MapRecord interpreter "V" rl r r')
   ⇒ Interpret interpreter field (V r) r''
   where
-  interpret _ (V r) = alg (AlgProxy ∷ AlgProxy interpreter field (V r)) $ (mapRecord (MapProxy ∷ MapProxy interpreter "V") (RLProxy ∷ RLProxy rl) r)
+  interpretImpl _ (V r) = alg (AlgProxy ∷ AlgProxy interpreter field (V r)) $ (mapRecord (MapProxy ∷ MapProxy interpreter "V") (RLProxy ∷ RLProxy rl) r)
 
 instance interpretB
   ∷ (Alg interpreter field (B a) a a')
   ⇒ Interpret interpreter field (B a) a'
   where
-  interpret _ (B a) = alg (AlgProxy ∷ AlgProxy interpreter field (B a)) $ a
+  interpretImpl _ (B a) = alg (AlgProxy ∷ AlgProxy interpreter field (B a)) $ a
 
 -- | We are storing here:
 -- | * name of our interpreter
@@ -376,7 +376,8 @@ instance algBuilderVV
     (ApplicativeCat ((→) (a → result)) Record.Builder.Builder {} {|r})
     (ApplicativeCat ((→) (Variant v' → result)) Record.Builder.Builder {|n} {|n'})
   where
-    alg _ (ApplicativeCat v2rb) = ApplicativeCat (\v2r → Record.Builder.insert _fieldName (Record.Builder.build (v2rb (v2r <<< inj _fieldName)) {}))
+    alg _ (ApplicativeCat v2rb) =
+      ApplicativeCat (\v2r → Record.Builder.insert _fieldName (Record.Builder.build (v2rb (v2r <<< inj _fieldName)) {}))
       where
         _fieldName = SProxy ∷ SProxy fieldName
 
@@ -385,3 +386,6 @@ instance algBuilderVV
 class SameLabels (list ∷ RowList) (row ∷ # Type) | list → row
 instance sameLabelsNil ∷ SameLabels Nil ()
 instance sameLabelsCons ∷ (RowCons name a row' row,  SameLabels tail row') ⇒ SameLabels (Cons name x tail) row
+
+interpret ∷ ∀ a b interpreter. IsSymbol interpreter ⇒ Interpret interpreter Root a b ⇒ SProxy interpreter → a → b
+interpret _ = interpretImpl (InterpretProxy ∷ InterpretProxy interpreter Root)
