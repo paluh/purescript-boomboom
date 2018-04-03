@@ -2,17 +2,18 @@ module Test.BoomBoom.Generic.Interpret where
 
 import Prelude
 
-import BoomBoom.Generic.Interpret (B(..), InterpretProxy(..), R(..), Root, V(..), interpret)
 import BoomBoom (parse, serialize)
+import BoomBoom.Generic.Interpret (B(..), InterpretProxy(..), R(..), Root, V(..), interpret)
 import BoomBoom.Strings (int)
 import Data.Maybe (Maybe(..))
 import Global.Unsafe (unsafeStringify)
 import Test.Unit (suite) as Test.Unit
 import Test.Unit (test)
 import Test.Unit.Assert (equal)
+import Type.Prelude (SProxy(..))
 
-genBuilder = interpret (InterpretProxy ∷ InterpretProxy "builder" Root)
-genBoomboom = interpret (InterpretProxy ∷ InterpretProxy "boomboom" Root)
+genBuilder = interpret (SProxy ∷ SProxy "builder")
+genBoomboom = interpret (SProxy ∷ SProxy "boomboom")
 
 suite = do
   Test.Unit.suite "BoomBoom.Generic.Interpret" $ do
