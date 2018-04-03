@@ -16,7 +16,7 @@ The core type of this library is `BoomBoom.BoomBoom` which translates really to 
 newtype BoomBoom tok a = BoomBoom { prs ∷ tok → Maybe { a ∷ a, tok ∷ tok }, ser ∷ a → tok }
 ```
 
-So our `BoomBoom tok a` is a simple parser from `tok` to `a` and also a total serializer function in oposite direction.
+So our `BoomBoom tok a` is a simple parser from `tok` to `a` and also a total serializer function in opposite direction.
 
 ## Usage
 
@@ -40,10 +40,10 @@ let
 Test.Unit.suite "simple record boomboom" $ do
 
   test "serializes correctly" $ do
-    equal ["1", "2", "3"] (serialize recordB { x: 1, y: 2, z: 3 })
+    equal ("1":"2":"3":Nil) (serialize recordB { x: 1, y: 2, z: 3 })
 
   test "parses correctly" $ do
-    equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB ["1", "2", "3"])
+    equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB ("1":"2":"3":Nil))
 ```
 
 Variant `BoomBoom` generation and usage (with `variant` helper):
@@ -60,10 +60,10 @@ let
     }
 Test.Unit.suite "simple variant boomboom" $ do
   let
-    wrong = ["wrong", "8"]
-    zi = ["zero"]
-    oi = ["one", "1"]
-    ti = ["two", "2", "3", "4"]
+    wrong = ("wrong":"8":Nil)
+    zi = ("zero":Nil)
+    oi = ("one":"1":Nil)
+    ti = ("two":"2":"3":"4":Nil)
     zv = inj (SProxy ∷ SProxy "zero") unit
     ov = inj (SProxy ∷ SProxy "one") 1
     tv = inj (SProxy ∷ SProxy "two") (R {x: 2, y: 3, z: 4})
@@ -90,7 +90,7 @@ let
         }
     , p2: int
     }
-  i = ["p1", "sp1", "1", "2", "3"]
+  i = ("p1":"sp1":"1":"2":"3":Nil)
   iv = inj (SProxy ∷ SProxy "p1") (inj (SProxy ∷ SProxy "sp1") (R {x: 1, y: 2, z: 3}))
 test "serializes correctly" $ do
   equal i (serialize nestedB iv)
@@ -106,7 +106,7 @@ Let's assume that we have routes from previous example and want to produce this 
   serialize $ inj (SProxy ∷ SProxy "p1") (inj (SProxy ∷ SProxy "sp1") {x: 1, y: 2, z: 3})
 ```
 
-This API clutters our code with usage of all these `inj` functions and `SProxy` constructors.
+This API is not really readable and easy to use as we have to nest all these `inj` functions with `SProxy` constructors.
 
 In `BoomBoom.Generic.Interpret` you can find "type level interpreters" which are able to produce `BoomBooms` but also easy to use builders of values (variants/records) from "records tree".
 Instead of building `BoomBooms` directly you should define your tree using provided constructors:
@@ -124,7 +124,7 @@ desc = V
   }
 ```
 
-Now you can produce your `BoomBoom` value but also helpers:
+Now you can produce your `BoomBoom` value but also a `builder`:
 
 ```purescript
 import BoomBoom.Generic.Interpret (interpret, Root, InterpretProxy)
@@ -155,10 +155,10 @@ Now we can use this value and serialize it:
 serialize boomboom v
 ```
 
-Output (in case of `BoomBoom.Strings` serialization):
+Output (in case of `BoomBoom.Strings` serialization) value:
 
 ```purescript
-["p1", "sp1", "1", "2", "3"]
+("p1":"sp1":"1":"2":"3":Nil)
 ```
 
 ### `Applicative` API
@@ -176,16 +176,18 @@ path = BoomBoom $
 
 main :: forall e. Eff (console :: CONSOLE | e) Unit
 main = do
-  log $ unsafeStringify (parse path "8080test200")
+  log $ unsafeStringify (parse path ("8080":"test":"200":Nil))
 
   log (serialize path { x: 300, y: 800 })
 ```
 
-Output:
+Output values:
 
 ```shell
 {"value0":{"x":8080,"y":200}}
-300test800
+
+-- | I've replaced here `Cons` with (:) to simplify reading
+("300":"test":"800":Nil)
 ```
 
 ## TODO
