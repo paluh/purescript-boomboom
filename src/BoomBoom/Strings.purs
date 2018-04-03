@@ -2,17 +2,17 @@ module BoomBoom.Strings where
 
 import Prelude
 
+import BoomBoom (BoomBoom(BoomBoom), BoomBoomD(BoomBoomD), addChoice, CoproductBuilder) as B
 import BoomBoom.Generic (class VariantBoomBoom)
 import BoomBoom.Generic (variant) as Generic
-import BoomBoom (BoomBoom(BoomBoom), BoomBoomD(BoomBoomD), addChoice, CoproductBuilder) as B
-import Data.Array (singleton, uncons)
 import Data.Either (Either)
 import Data.Int (fromString)
+import Data.List (List, singleton, uncons)
 import Data.Maybe (Maybe(..))
 import Data.Variant (Variant)
 import Type.Prelude (class IsSymbol, class RowToList, SProxy, reflectSymbol)
 
-type Tok = Array String
+type Tok = List String
 type BoomBoom a = B.BoomBoom Tok a
 type BoomBoomD a' a = B.BoomBoomD Tok a' a
 

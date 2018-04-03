@@ -4,6 +4,7 @@ import Prelude
 
 import BoomBoom (BoomBoom(..), addField, buildRecord, buildVariant, parse, serialize, (>-))
 import BoomBoom.Strings (addChoice, int)
+import Data.List ((:), List(..))
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Variant (inj)
@@ -30,9 +31,9 @@ suite = do
         <*> _.z >- int
     Test.Unit.suite "simple record boomboom build by hand" $ do
       test "serializes correctly" $ do
-        equal ["1", "2", "3"] (serialize recordB { x: 1, y: 2, z: 3 })
+        equal ("1":"2":"3":Nil) (serialize recordB { x: 1, y: 2, z: 3 })
       test "parses correctly" $ do
-        equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB ["1", "2", "3"])
+        equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB ("1":"2":"3":Nil))
     let
       recordB'
         = buildRecord
@@ -41,9 +42,9 @@ suite = do
         >>> addField (SProxy ∷ SProxy "z") int
     Test.Unit.suite "simple record boomboom build with combinators" $ do
       test "serializes correctly" $ do
-        equal ["1", "2", "3"] (serialize recordB' { x: 1, y: 2, z: 3 })
+        equal ("1":"2":"3":Nil) (serialize recordB' { x: 1, y: 2, z: 3 })
       test "parses correctly" $ do
-        equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB' ["1", "2", "3"])
+        equal (Just $ R { x: 1, y: 2, z: 3 }) (R <$> parse recordB' ("1":"2":"3":Nil))
     let
       nestedB = BoomBoom $
         { r1: _, r2: _ }
@@ -51,7 +52,7 @@ suite = do
         <*> _.r2 >- recordB
     Test.Unit.suite "nested record boomboom build by hand" $ do
       let
-        l = ["1", "2", "3", "11", "12", "13"]
+        l = ("1":"2":"3":"11":"12":"13":Nil)
         r = { r1: {x: 1, y: 2, z: 3}, r2: { x: 11, y: 12, z: 13 }}
       test "serializes correctly" $ do
         equal l (serialize nestedB r)
@@ -65,7 +66,7 @@ suite = do
         >>> addField (SProxy ∷ SProxy "r2") recordB
     Test.Unit.suite "nested record boomboom build with combinators" $ do
       let
-        l = ["1", "2", "3", "11", "12", "13"]
+        l = "1":"2":"3":"11":"12":"13":Nil
         r = { r1: {x: 1, y: 2, z: 3}, r2: { x: 11, y: 12, z: 13 }}
       test "serializes correctly" $ do
         equal l (serialize nestedB r)
@@ -80,10 +81,10 @@ suite = do
         >>> addChoice (SProxy ∷ SProxy "zero") (BoomBoom $ pure unit)
     Test.Unit.suite "simple variant boomboom" $ do
       let
-        wrong = ["wrong", "8"]
-        zi = ["zero"]
-        oi = ["one", "1"]
-        ti = ["two", "2", "3", "4"]
+        wrong = "wrong":"8":Nil
+        zi = "zero":Nil
+        oi = "one":"1":Nil
+        ti = "two":"2":"3":"4":Nil
         zv = inj (SProxy ∷ SProxy "zero") unit
         ov = inj (SProxy ∷ SProxy "one") 1
         tv = inj (SProxy ∷ SProxy "two") (R {x: 2, y: 3, z: 4})
@@ -106,7 +107,7 @@ suite = do
 
     Test.Unit.suite "nested variant boomboom" $ do
       let
-        vi = ["variant", "two", "2", "3", "4"]
+        vi = "variant":"two":"2":"3":"4":Nil
         vv = inj (SProxy ∷ SProxy "variant") (inj (SProxy ∷ SProxy "two") (R {x: 2, y: 3, z: 4}))
       test "serializes correctly" $ do
         equal vi (serialize nestedVariantB vv)
