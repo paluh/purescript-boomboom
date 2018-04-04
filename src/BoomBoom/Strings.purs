@@ -9,7 +9,9 @@ import Data.Either (Either)
 import Data.Int (fromString)
 import Data.List (List, singleton, uncons)
 import Data.Maybe (Maybe(..))
+import Data.Monoid (mempty)
 import Data.Variant (Variant)
+import Prelude as Prelude
 import Type.Prelude (class IsSymbol, class RowToList, SProxy, reflectSymbol)
 
 type Tok = List String
@@ -45,11 +47,17 @@ int = B.BoomBoom $ B.BoomBoomD $
   , ser: singleton <<< show
   }
 
+unit ∷ BoomBoom Unit
+unit = B.BoomBoom $ B.BoomBoomD $
+  { prs: \tok → Just {a: Prelude.unit, tok }
+  , ser: const mempty
+  }
+
 litD ∷ ∀ a'. String -> BoomBoomD a' Unit
 litD tok = B.BoomBoomD
   { prs: uncons >=> \{ head, tail } → if head == tok
       then
-        Just { a: unit, tok: tail }
+        Just { a: Prelude.unit, tok: tail }
       else
         Nothing
   , ser: const (singleton tok)

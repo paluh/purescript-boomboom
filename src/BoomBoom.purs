@@ -162,9 +162,11 @@ addChoice
   ⇒ IsSymbol n
   ⇒ Semigroup tok
   ⇒ Eq tok
+  -- | Choice variant label.
   ⇒ SProxy n
   -- | Please provide unique prefix for this choice
-  -- | so it can be parsed back.
+  -- | so it can be parsed back. You probably want
+  -- | to produce it somehow from above `n`.
   → BoomBoom tok Unit
   → BoomBoom tok a
   -- | Don't worry about this result signature

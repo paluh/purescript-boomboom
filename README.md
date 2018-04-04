@@ -20,9 +20,11 @@ So our `BoomBoom tok a` is a simple parser from `tok` to `a` and also a total se
 
 ## Usage
 
-### Generic helpers
+### Basic generic helpers
 
-These are tests fragments (`test/BoomBoom/Generic.purs`) which use generic helpers:
+Please note that more user friendly API is described in the next section.
+
+These are tests fragments (`test/BoomBoom/Generic.purs`) which use basic generic helpers:
 
 * `tok` in this case is an `Array String`
 

@@ -1,13 +1,14 @@
 module Test.BoomBoom.Generic.Interpret where
 
-import Prelude
+import Prelude hiding (unit)
 
 import BoomBoom (parse, serialize)
 import BoomBoom.Generic.Interpret (class Interpret, B(B), R(R), Root, V(V), interpret)
-import BoomBoom.Strings (int)
-import Data.List((:), List(..))
+import BoomBoom.Strings (int, string, unit)
+import Data.List ((:), List(..))
 import Data.Maybe (Maybe(..))
 import Global.Unsafe (unsafeStringify)
+import Prelude as Prelude
 import Test.Unit (TestSuite, test)
 import Test.Unit (suite) as Test.Unit
 import Test.Unit.Assert (equal)
@@ -51,4 +52,19 @@ suite = do
         equal (unsafeStringify $ parse boomboom ("x":"8":"30":Nil)) (unsafeStringify $ Just $ builder {a: \b → b.x 8, b: 30})
         equal (unsafeStringify $ parse boomboom ("y":"8":"9":"30":Nil)) (unsafeStringify $ Just $  (builder {a: \b → b.y { s: 8, t: 9}, b: 30}))
 
-
+    Test.Unit.suite "variant with empty label" $ do
+      let
+        r = V
+          { product: B string
+          , login: B unit
+          , logout: B unit
+          , "": B unit
+          }
+        builder = genBuilder r
+        boomboom = genBoomboom r
+      test "serializes correctly" $ do
+        equal ("":Nil) (serialize boomboom (builder."" Prelude.unit))
+        equal ("product":"89asdf":Nil) (serialize boomboom (builder.product "89asdf"))
+      test "parses correctly" $ do
+        equal (parse boomboom ("":Nil)) (Just $ builder."" Prelude.unit)
+        equal (parse boomboom ("product":"89asdf":Nil)) (Just $ builder."product" "89asdf")
