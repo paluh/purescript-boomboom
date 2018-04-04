@@ -129,7 +129,8 @@ desc = V
 Now you can produce your `BoomBoom` value but also a `builder`:
 
 ```purescript
-import BoomBoom.Generic.Interpret (interpret, Root, InterpretProxy)
+import BoomBoom.Generic.Interpret (interpret)
+import Type.Prelude (SProxy(..))
 
 -- | Generate a builder
 builder = interpret (SProxy ∷ SProxy "builder") desc
