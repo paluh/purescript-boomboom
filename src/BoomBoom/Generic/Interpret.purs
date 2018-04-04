@@ -36,10 +36,11 @@ data B t = B t
 foreign import kind Field
 foreign import data Root ∷ Field
 -- | Allow case analysis on constrctor:
--- | 1. Parent name (this provides a way to
+-- | 1. Parent name - it will be changed to parent
+-- | type soon. It provides a way to
 -- | break usual "locality" of *morphisms
 -- | algebras which is required in case of
--- | BoomBooms generation).
+-- | BoomBooms generation.
 -- | 2. Field name which we are in.
 foreign import data Field ∷ Symbol → Symbol → Field
 

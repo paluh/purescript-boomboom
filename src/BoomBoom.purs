@@ -69,11 +69,7 @@ instance profunctorBoomBoomD ∷ Profunctor (BoomBoomD tok) where
 -- | This can be tedious and leaves responsibility on the user
 -- | to accordingly pick and create elements of a product.
 -- | For example I could easily replace `_.x` with `_.y` (and get two `_.y`)
--- | by mistake
--- | and it won't be detected by compiler.
--- |
--- | There is helper defined down below which handles record
--- | case more securely.
+-- | by mistake and it won't be detected by compiler.
 divergeA ∷ ∀ a a' tok. (a' → a) → BoomBoom tok a → BoomBoomD tok a' a
 divergeA d (BoomBoom (BoomBoomD { prs, ser })) = BoomBoomD { prs, ser: d >>> ser }
 
@@ -91,10 +87,11 @@ instance applyBoomBoomD ∷ (Semigroup tok) ⇒ Apply (BoomBoomD tok a') where
 instance applicativeBoomBoomD ∷ (Monoid tok) ⇒ Applicative (BoomBoomD tok a') where
   pure a = BoomBoomD { prs: pure <<< const { a, tok: mempty }, ser: const mempty }
 
--- | This `Alt` instance is also somewhat dangerous - it allows
--- | you to define inconsistent `BoomBoom` in case for example
--- | of your sum type so you can get `tok's` `mempty` as a result
--- | of serialization which is not parsable.
+-- | This `Alt` instance is somewhat dangerous - it allows
+-- | you to define inconsistent `BoomBoom`. For example
+-- | in case of coproduct type you can get `tok's` `mempty`
+-- | value as a result of serialization which is not parsable
+-- | by the same `BoomBoom`.
 instance altBoomBoom ∷ (Monoid tok) ⇒ Alt (BoomBoomD tok a') where
   alt (BoomBoomD b1) (BoomBoomD b2) = BoomBoomD { prs, ser }
     where
@@ -104,12 +101,12 @@ instance altBoomBoom ∷ (Monoid tok) ⇒ Alt (BoomBoomD tok a') where
       r → r
     ser = (<>) <$> b1.ser <*> b2.ser
 
--- | Enter the world of two categories which fully keep track of
--- | `BoomBoom` divergence and allow us define nice combinators
--- | for variant and record build up.
+-- | These two semigroupoids keep track of
+-- | `BoomBoom` divergence and allow us to define
+-- | nice combinators for variant and record build up.
 -- |
 -- | You should not really worry about these two types because
--- | their are underlying machinery for higher level
+-- | they are underlying machinery for higher level
 -- | combinators `addChoice`/`buildVariant` and `addField`/`buildRecord`.
 newtype ProductBuilder tok a r r' = ProductBuilder (BoomBoomD tok a (r → r'))
 
@@ -131,10 +128,7 @@ instance categoryProductBuilder ∷ (Monoid tok) ⇒ Category (ProductBuilder to
 -- | For sure serializer could be expressed much easier
 -- | (like: `a → (b → t) → t`) but we want to use
 -- | `BooBoomD` for this and we've got `ser: a'-> tok`
--- | with moving `a'` part to our disposition. So welcome in:
--- |        __The Callback Hell__
--- |
--- |...don't worry it is just plumbing ;-)
+-- | with moving `a'` part to our disposition.
 newtype CoproductBuilder tok a v v' = CoproductBuilder (BoomBoomD tok ((v → v') → tok) a)
 
 instance semigroupoidCoproductBuilder ∷ (Semigroup tok) ⇒ Semigroupoid (CoproductBuilder tok a) where
@@ -162,7 +156,7 @@ addChoice
   ⇒ IsSymbol n
   ⇒ Semigroup tok
   ⇒ Eq tok
-  -- | Choice variant label.
+  -- | Label of this variant option.
   ⇒ SProxy n
   -- | Please provide unique prefix for this choice
   -- | so it can be parsed back. You probably want
