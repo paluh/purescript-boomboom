@@ -20,6 +20,16 @@ genBuilder = interpret (SProxy ∷ SProxy "builder")
 genBoomboom ∷ forall a b. Interpret "boomboom" Root a b ⇒ a → b
 genBoomboom = interpret (SProxy ∷ SProxy "boomboom")
 
+-- | Test plain inference (no other context)
+vvb =  V { a : V { b : B int }}
+vvb' = genBuilder vvb
+
+vrb =  V { a : R { b : B int }}
+vrb' = genBuilder vrb
+
+rrb =  R { a : R { b : B int }}
+rrb' = genBuilder rrb
+
 suite ∷ ∀ e. TestSuite e
 suite = do
   Test.Unit.suite "BoomBoom.Generic.Interpret" $ do

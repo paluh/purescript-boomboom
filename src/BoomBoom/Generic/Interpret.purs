@@ -11,6 +11,7 @@ import Data.Monoid (class Monoid)
 import Data.Record (get)
 import Data.Record as Data.Record
 import Data.Record.Builder as Record.Builder
+import Data.Record.Catamorphism (class Algebra, class Cata, cata)
 import Data.Variant (Variant, inj)
 import Type.Prelude (class IsSymbol, class RowLacks, class RowToList, RLProxy(RLProxy), SProxy(SProxy))
 import Type.Row (Cons, Nil, kind RowList)
@@ -255,7 +256,6 @@ instance algBuilderRootV
 
 instance algBuilderRB
   ∷ ( RowCons fieldName a builder builder'
-    , RowLacks fieldName builder
     , IsSymbol fieldName
     , RowCons fieldName a output output'
     , RowLacks fieldName output
@@ -319,7 +319,6 @@ instance algBuilderRV
 
 instance algBuilderVB
   ∷ ( RowCons fieldName a v v'
-    , RowLacks fieldName v
     , IsSymbol fieldName
     , RowCons fieldName (a → result) r r'
     , RowLacks fieldName r
@@ -363,6 +362,10 @@ instance algBuilderVV
     , IsSymbol fieldName
     , RowCons fieldName {|r} n n'
     , RowLacks fieldName n
+    , RowToList n nl
+    , SameLabels nl v
+    , RowToList v vl
+    , SameLabels vl n
     )
   ⇒ Alg
     "builder"
@@ -384,3 +387,87 @@ instance sameLabelsCons ∷ (RowCons name a row' row,  SameLabels tail row') ⇒
 
 interpret ∷ ∀ a b interpreter. IsSymbol interpreter ⇒ Interpret interpreter Root a b ⇒ SProxy interpreter → a → b
 interpret _ = interpretImpl (InterpretProxy ∷ InterpretProxy interpreter Root)
+
+data Unwrap = Unwrap
+
+instance algUnwrapR
+  ∷ ( RowToList r rl
+    , Cata Unwrap rl r (Record.Builder.Builder {} {|r'})
+    , IsSymbol name
+    , RowCons name {|r'} o o'
+    , RowLacks name o
+    )
+  ⇒ Algebra Unwrap name (R r) (Record.Builder.Builder {|o} {|o'}) where
+  algebra alg name (R r) = Record.Builder.insert name (Record.Builder.build r' {})
+    where
+    r' = cata alg (RLProxy ∷ RLProxy rl) r
+
+instance algUnwrapV
+  ∷ ( RowToList r rl
+    , Cata Unwrap rl r (Record.Builder.Builder {} {|r'})
+    , IsSymbol name
+    , RowCons name {|r'} o o'
+    , RowLacks name o
+    )
+  ⇒ Algebra Unwrap name (V r) (Record.Builder.Builder {|o} {|o'}) where
+  algebra alg name (V r) = Record.Builder.insert name (Record.Builder.build r' {})
+    where
+    r' = cata alg (RLProxy ∷ RLProxy rl) r
+
+class Run alg input output | alg input → output where
+  run ∷ alg → input → output
+
+instance runR
+  ∷ ( RowToList r rl
+    , Cata Unwrap rl r (Record.Builder.Builder {} {|o})
+    )
+  ⇒ Run Unwrap (R r) {|o}
+  where
+  run u (R r) = Record.Builder.build (cata Unwrap (RLProxy ∷ RLProxy rl) r) {}
+
+instance runV
+  ∷ ( RowToList r rl
+    , Cata Unwrap rl r (Record.Builder.Builder {} {|o})
+    )
+  ⇒ Run Unwrap (V r) {|o}
+  where
+  run u (V r) = Record.Builder.build (cata Unwrap (RLProxy ∷ RLProxy rl) r) {}
+
+
+-- data Builder = Builder
+
+--⇒ Algebra Unwrap name (V r) (Record.Builder.Builder {|o} {|o'}) where
+
+-- instance algBuilderV
+--   ∷ ( RowCons fieldName a builder builder'
+--   --   , RowLacks fieldName builder
+--   --   , IsSymbol fieldName
+--   --   , RowCons fieldName a output output'
+--   --   , RowLacks fieldName output
+--     , Cata Builder rl r (ApplicativeCat ((→) {|builder'}) Record.Builder.Builder {|output} {|output'})
+--     )
+--   ⇒ Algebra Builder name (V r)
+--   where
+--     alg _ _ = ApplicativeCat (\i → Record.Builder.insert _fieldName (get _fieldName i))
+--     alg _ _ = ApplicativeCat (\i → Record.Builder.insert _fieldName (get _fieldName i))
+--       where
+--         _fieldName = SProxy ∷ SProxy fieldName
+
+-- instance algBuilderRB
+--   ∷ ( RowCons fieldName a builder builder'
+--     , RowLacks fieldName builder
+--     , IsSymbol fieldName
+--     , RowCons fieldName a output output'
+--     , RowLacks fieldName output
+--     )
+--   ⇒ Alg
+--     "builder"
+--     (Field "R" fieldName)
+--     (B o)
+--     (BoomBoom tok a)
+--     (ApplicativeCat ((→) {|builder'}) Record.Builder.Builder {|output} {|output'})
+--   where
+--     alg _ _ = ApplicativeCat (\i → Record.Builder.insert _fieldName (get _fieldName i))
+--       where
+--         _fieldName = SProxy ∷ SProxy fieldName
+-- 
