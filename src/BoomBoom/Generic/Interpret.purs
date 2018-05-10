@@ -361,10 +361,6 @@ instance algBuilderVV
     , IsSymbol fieldName
     , RowCons fieldName {|r} n n'
     , RowLacks fieldName n
-    , RowToList n nl
-    , SameLabels nl v
-    , RowToList v vl
-    , SameLabels vl n
     )
   ⇒ Alg
     "builder"

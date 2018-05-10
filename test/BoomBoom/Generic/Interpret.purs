@@ -24,11 +24,20 @@ genBoomboom = interpret (SProxy ∷ SProxy "boomboom")
 vvb =  V { a : V { b : B int }}
 vvb' = genBuilder vvb
 
+vvbb =  V { a : V { b : B int }, c: B int}
+vvbb' = genBuilder vvbb
+
 vrb =  V { a : R { b : B int }}
 vrb' = genBuilder vrb
 
+vrbb =  V { a : R { b : B int }, c: B int}
+vrbb' = genBuilder vrb
+
 rrb =  R { a : R { b : B int }}
 rrb' = genBuilder rrb
+
+rrbb =  R { a : R { b : B int }, b: B int}
+rrbb' = genBuilder rrbb
 
 suite ∷ ∀ e. TestSuite e
 suite = do
