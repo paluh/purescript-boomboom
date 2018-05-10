@@ -357,7 +357,6 @@ instance algBuilderVR
 
 instance algBuilderVV
   ∷ ( RowCons fieldName a v v'
-    , RowLacks fieldName v
     , IsSymbol fieldName
     , RowCons fieldName {|r} n n'
     , RowLacks fieldName n

@@ -20,12 +20,18 @@ genBuilder = interpret (SProxy ∷ SProxy "builder")
 genBoomboom ∷ forall a b. Interpret "boomboom" Root a b ⇒ a → b
 genBoomboom = interpret (SProxy ∷ SProxy "boomboom")
 
--- | Test plain inference (no other context)
+-- | Not really systematicall inference test cases
 vvb =  V { a : V { b : B int }}
 vvb' = genBuilder vvb
 
-vvbb =  V { a : V { b : B int }, c: B int}
+vvbb =  V { a : V { b : B int, c: B int }}
 vvbb' = genBuilder vvbb
+
+vvvbb =  V { s: V { a : V { b : B int, c: B int }}}
+vvvbb' = genBuilder vvvbb
+
+vbvb =  V { a : B unit, c: V { d : B unit }, d: B unit}
+vbvb' = genBuilder vbvb
 
 vrb =  V { a : R { b : B int }}
 vrb' = genBuilder vrb
@@ -38,6 +44,9 @@ rrb' = genBuilder rrb
 
 rrbb =  R { a : R { b : B int }, b: B int}
 rrbb' = genBuilder rrbb
+
+rrrbb =  R { s: R { a : R { b : B int }, b: B int }}
+rrrbb' = genBuilder rrbb
 
 suite ∷ ∀ e. TestSuite e
 suite = do
