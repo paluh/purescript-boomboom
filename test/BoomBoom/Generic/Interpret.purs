@@ -30,6 +30,9 @@ vvbb' = genBuilder vvbb
 vvvbb =  V { s: V { a : V { b : B int, c: B int }}}
 vvvbb' = genBuilder vvvbb
 
+vvrb =  V { v: V { r : R { b : B int }}}
+vvrb' = genBuilder vvrb
+
 vbvb =  V { a : B unit, c: V { d : B unit }, d: B unit}
 vbvb' = genBuilder vbvb
 

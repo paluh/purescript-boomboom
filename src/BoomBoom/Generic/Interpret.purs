@@ -272,7 +272,6 @@ instance algBuilderRB
 
 instance algBuilderRR
   ∷ ( RowCons fieldName {|subbuilder} builder builder'
-    , RowLacks fieldName builder
     , IsSymbol fieldName
     , RowCons fieldName {|suboutput} output output'
     , RowLacks fieldName output
@@ -292,7 +291,6 @@ instance algBuilderRR
 
 instance algBuilderRV
   ∷ ( RowCons fieldName ({|subbuilder} → Variant v) builder builder'
-    , RowLacks fieldName builder
     , IsSymbol fieldName
     , RowCons fieldName (Variant v) output output'
     , RowLacks fieldName output
@@ -338,7 +336,6 @@ instance algBuilderVR
     , RowLacks fieldName output
     , IsSymbol fieldName
     , RowCons fieldName {|suboutput} v v'
-    , RowLacks fieldName v
     , RowToList suboutput ol
     , SameLabels ol subbuilder
     )
