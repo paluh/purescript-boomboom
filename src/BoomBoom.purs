@@ -2,7 +2,7 @@ module BoomBoom where
 
 import Prelude
 
-import Control.Alt (class Alt, (<|>))
+import Control.Alt (class Alt)
 import Control.Apply (lift2)
 import Data.Either (Either(Right, Left))
 import Data.Functor.Invariant (class Invariant, imap)
@@ -133,7 +133,9 @@ newtype CoproductBuilder tok a v v' = CoproductBuilder (BoomBoomD tok ((v → v'
 
 instance semigroupoidCoproductBuilder ∷ (Semigroup tok) ⇒ Semigroupoid (CoproductBuilder tok a) where
   compose (CoproductBuilder (BoomBoomD b1)) (CoproductBuilder (BoomBoomD b2)) = CoproductBuilder $ BoomBoomD
-    { prs: \tok → b2.prs tok <|> b1.prs tok
+    { prs: \tok → case b2.prs tok of
+        Nothing → b1.prs tok
+        r → r
     , ser: \a2c2t → b2.ser (\a2b → b1.ser (\b2c → a2c2t (a2b >>> b2c)))
     }
 
