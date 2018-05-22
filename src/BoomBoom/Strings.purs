@@ -7,7 +7,7 @@ import BoomBoom.Generic (class VariantBoomBoom)
 import BoomBoom.Generic (variant) as Generic
 import Data.Either (Either)
 import Data.Int (fromString)
-import Data.List (List, singleton, uncons)
+import Data.List (List(..), singleton, uncons)
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import Data.Variant (Variant)
@@ -55,11 +55,9 @@ unit = B.BoomBoom $ B.BoomBoomD $
 
 litD ∷ ∀ a'. String -> BoomBoomD a' Unit
 litD tok = B.BoomBoomD
-  { prs: uncons >=> \{ head, tail } → if head == tok
-      then
-        Just { a: Prelude.unit, tok: tail }
-      else
-        Nothing
+  { prs: case _ of
+      Cons head tail | head == tok → Just { a: Prelude.unit, tok: tail }
+      otherwise → Nothing
   , ser: const (singleton tok)
   }
 
