@@ -1,6 +1,10 @@
 # purescript-boomboom
 
-Never hard code your urls again. Boomboom them all!
+## Disclaimer
+
+Never hard code your urls again. ~~Boomboom~~ [routing-duplex](https://github.com/natefaubion/purescript-routing-duplex) them all!
+
+It was quite nice experiment but I feel that `routing-duplex` exposes much cleaner and user friendly API at this moment so please check it first ;-)
 
 ## Description
 
